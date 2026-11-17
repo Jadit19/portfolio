@@ -111,3 +111,9 @@ dist
 
 # TernJS port file
 .tern-port
+
+# Visual smoke-test output
+snapshots/
+
+# Markdown files
+DECISIONS.md
