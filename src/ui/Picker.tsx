@@ -3,6 +3,7 @@ import { WORLDS, type WorldInfo, world } from "../content/worlds";
 import { app, patchCount } from "../state/app";
 import { useStore } from "../state/store";
 import { RIDES } from "../three/world/rides";
+import { Arrow } from "./Arrow";
 import { useCompact } from "./useCompact";
 
 const tint = (w: WorldInfo) => ({ "--tint": w.tint }) as CSSProperties;
@@ -32,8 +33,7 @@ export function Label({ text }: { text: string }) {
     <>
       {i < 0 ? "" : `${text.slice(0, i)} `}
       <span className="nowrap">
-        {text.slice(i + 1)}
-        <span aria-hidden="true"> →</span>
+        {text.slice(i + 1)} <Arrow dir="next" />
       </span>
     </>
   );

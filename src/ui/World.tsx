@@ -12,6 +12,7 @@ import { ride } from "../state/ride";
 import { useStore } from "../state/store";
 import type { RideStop } from "../three/world/rides";
 import { WorldScene } from "../three/world/scene";
+import { Arrow } from "./Arrow";
 
 const coarse = () => typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches;
 
@@ -196,7 +197,7 @@ export function WorldHud({ scene }: { scene: WorldScene }) {
             {live?.ok ? `brewing ✓ ${live.ms} ms` : live?.ok === false ? "resting" : "…"}
           </span>
           <b>
-            Open {def.live?.host} <span aria-hidden="true">↗</span>
+            Open {def.live?.host} <Arrow dir="out" />
           </b>
           {!touch && <kbd>L</kbd>}
         </button>
@@ -354,7 +355,7 @@ function StopCard({
             {stop.links.map((l) => (
               <a key={l.href} href={l.href} target="_blank" rel="noopener">
                 <LinkIcon kind={l.kind} />
-                {l.label} <span aria-hidden="true">↗</span>
+                {l.label} <Arrow dir="out" />
               </a>
             ))}
           </p>
@@ -366,8 +367,7 @@ function StopCard({
           Keep riding
         </button>
         <button type="button" className="ride" onClick={onNext}>
-          {allFound ? "Cruise to the next" : "Cruise to a new stop"}{" "}
-          <span aria-hidden="true">→</span>
+          {allFound ? "Cruise to the next" : "Cruise to a new stop"} <Arrow dir="next" />
         </button>
       </div>
     </aside>
@@ -713,7 +713,7 @@ function RotateGate({ onAnyway }: { onAnyway: () => void }) {
       <p>The estate opens up in landscape: tilt to steer, tap to ride.</p>
       <div className="gateactions">
         <button type="button" className="ghost" onClick={WorldScene.leave}>
-          ← Yard
+          <Arrow dir="back" /> Yard
         </button>
         <button type="button" className="linkish" onClick={onAnyway}>
           Ride in portrait anyway

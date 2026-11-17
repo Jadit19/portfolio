@@ -2166,3 +2166,12 @@ kbd {
   background: color-mix(in srgb, rgb(29 31 36 / 0.08), rgb(246 236 217 / 0.12) var(--night));
   color: color-mix(in srgb, var(--dark), #f1e8d8 var(--night));
 }
+
+/* Drawn arrows on buttons and links (text arrows turn into emoji on iOS). */
+.arrow {
+  display: inline-block;
+  width: 0.9em;
+  height: 0.9em;
+  vertical-align: -0.1em;
+  flex: none;
+}

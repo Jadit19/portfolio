@@ -3,6 +3,7 @@ import { world } from "../content/worlds";
 import { app, leaveWorld, setNight } from "../state/app";
 import { useStore } from "../state/store";
 import { prefersReducedMotion } from "../three/anim";
+import { Arrow } from "./Arrow";
 import { canFullscreen, enterFullscreen, exitFullscreen, inFullscreen } from "./fullscreen";
 
 export const RESUME_URL = "https://resume.aditjain.me";
@@ -19,7 +20,7 @@ export function TopBar() {
         {riding ? (
           // On a journey the way back is what matters (the passport lives in the yard).
           <button type="button" className="chip" onClick={leaveWorld}>
-            <span aria-hidden="true">←</span> Yard
+            <Arrow dir="back" /> Yard
           </button>
         ) : null}
         {/* In a ride you're already full screen (Ride asks for it), and the passport lives in the yard. */}
@@ -27,7 +28,7 @@ export function TopBar() {
         {riding ? null : <PassportButton />}
         <NightButton />
         <a className="resume" href={RESUME_URL} target="_blank" rel="noopener">
-          Résumé <span aria-hidden="true">↗</span>
+          Résumé <Arrow dir="out" />
         </a>
       </nav>
     </header>

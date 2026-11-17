@@ -3,6 +3,7 @@ import { WORLDS, world } from "../content/worlds";
 import { app, patchCount } from "../state/app";
 import { useStore } from "../state/store";
 import type { GarageScene } from "../three/garage/scene";
+import { Arrow } from "./Arrow";
 import { RideLabel, ride } from "./Picker";
 import { useCompact } from "./useCompact";
 
@@ -40,7 +41,7 @@ export function Inspect({ garage }: { garage: GarageScene }) {
   return (
     <>
       <button type="button" className="back" onClick={() => app.patch({ view: "table" })}>
-        <span aria-hidden="true">←</span> {compact ? "Journeys" : "Map table"}
+        <Arrow dir="back" /> {compact ? "Journeys" : "Map table"}
       </button>
       <div className="spin" aria-hidden="true">
         <span className="dial" ref={dial} />

@@ -3,6 +3,7 @@ import { WORLDS } from "../content/worlds";
 import { app, patchCount } from "../state/app";
 import { foundIn, STOPS_IN } from "../state/ride";
 import { useStore } from "../state/store";
+import { Arrow } from "./Arrow";
 
 /**
  * The passport: opened by tapping the pin board (or the Passport button).
@@ -15,7 +16,7 @@ export function Passport() {
   return (
     <>
       <button type="button" className="back" onClick={() => app.patch({ view: "table" })}>
-        <span aria-hidden="true">←</span> Map table
+        <Arrow dir="back" /> Map table
       </button>
       <aside className="panel passport" aria-label="Passport">
         <p className="eyebrow">Passport</p>
@@ -59,7 +60,7 @@ export function Passport() {
             })
           }
         >
-          Print certificate <span aria-hidden="true">↗</span>
+          Print certificate <Arrow dir="out" />
         </button>
       </aside>
     </>
