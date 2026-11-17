@@ -1,0 +1,2168 @@
+/*
+ * Garage UI. Modern and minimal: warm dark glass over the 3D scene, cream
+ * cards, one accent per world (--tint). Every corner is rounded.
+ *
+ * Layout: a side panel on wide screens, a bottom sheet otherwise.
+ * Keep the breakpoint in sync with src/three/layout.ts.
+ */
+
+:root {
+  --ink: #f4ede2;
+  --ink-dim: rgb(244 237 226 / 0.66);
+  --glass: rgb(24 20 16 / 0.72);
+  --glass-strong: rgb(24 20 16 / 0.84);
+  --cream: #f6efdf;
+  --dark: #1d1f24;
+  --accent: #f5b83d;
+  --radius: 22px;
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --panel-w: min(400px, 30vw);
+  --sheet-h: 42dvh;
+  --gutter: 24px;
+  color-scheme: dark;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: #2b2723;
+  color: var(--ink);
+  font:
+    15px / 1.5 Inter,
+    system-ui,
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+
+button:focus-visible,
+a:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.app {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+}
+
+.stage {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.ui {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.ui > * {
+  pointer-events: auto;
+}
+
+/* ── top bar ─────────────────────────────────────────────────────────── */
+
+.topbar {
+  position: absolute;
+  /* Above the riding HUD's full-screen touch zones, so Garage and Résumé stay tappable. */
+  z-index: 3;
+  inset: 0 0 auto;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: max(18px, env(safe-area-inset-top)) var(--gutter) 28px;
+  background: linear-gradient(rgb(24 20 16 / 0.55), transparent);
+  pointer-events: none;
+}
+
+.topbar > * {
+  pointer-events: auto;
+}
+
+.brand b {
+  display: block;
+  font:
+    800 18px Outfit,
+    sans-serif;
+  letter-spacing: 0.06em;
+}
+
+.brand span {
+  font-size: 12px;
+  color: var(--ink-dim);
+}
+
+.resume {
+  display: inline-flex;
+  gap: 6px;
+  padding: 10px 16px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #1b1305;
+  font:
+    700 14px Inter,
+    sans-serif;
+  text-decoration: none;
+  transition:
+    transform 0.3s var(--ease),
+    box-shadow 0.3s var(--ease);
+}
+
+.resume:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 24px rgb(245 184 61 / 0.35);
+}
+
+/* ── panel: list + card ──────────────────────────────────────────────── */
+
+.eyebrow {
+  margin: 0;
+  font:
+    600 12px Inter,
+    sans-serif;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+}
+
+.panel {
+  position: absolute;
+  right: var(--gutter);
+  top: 88px;
+  bottom: var(--gutter);
+  width: var(--panel-w);
+  display: flex;
+  flex-direction: column;
+  padding: 18px;
+  border-radius: 28px;
+  background: var(--glass);
+  backdrop-filter: blur(18px) saturate(1.2);
+  -webkit-backdrop-filter: blur(18px) saturate(1.2);
+  overflow: hidden;
+  animation: rise 0.6s var(--ease) both;
+}
+
+.worlds {
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 2px;
+  overflow: auto;
+  scrollbar-width: none;
+}
+
+.world {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 14px 1fr;
+  column-gap: 10px;
+  align-items: center;
+  padding: 8px 12px;
+  border-radius: 14px;
+  text-align: left;
+  transition: background 0.25s var(--ease);
+}
+
+.world:hover {
+  background: rgb(255 255 255 / 0.07);
+}
+
+.world .dot {
+  grid-row: span 2;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--tint);
+  transition: box-shadow 0.3s var(--ease);
+}
+
+.world b {
+  font:
+    700 14px Outfit,
+    sans-serif;
+}
+
+.world span {
+  font-size: 11.5px;
+  color: var(--ink-dim);
+}
+
+.world.on {
+  background: rgb(255 255 255 / 0.14);
+}
+
+.world.on .dot {
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--tint) 40%, transparent);
+}
+
+.world.locked {
+  opacity: 0.55;
+}
+
+.card {
+  margin-top: auto;
+  padding: 16px;
+  border-radius: var(--radius);
+  background: var(--cream);
+  color: var(--dark);
+  border-top: 5px solid var(--tint);
+  animation: swap 0.45s var(--ease) both;
+}
+
+.panel > .card {
+  margin-top: 14px;
+}
+
+.card .eyebrow {
+  color: var(--tint);
+}
+
+.card h2 {
+  margin: 2px 0 0;
+  font:
+    900 30px / 1.1 Outfit,
+    sans-serif;
+}
+
+.card .lede {
+  margin: 6px 0 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: rgb(29 31 36 / 0.82);
+}
+
+.card .bike {
+  margin: 8px 0 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.card .bike span {
+  font-weight: 400;
+  opacity: 0.6;
+}
+
+.card .where {
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: rgb(29 31 36 / 0.5);
+}
+
+.nowrap {
+  white-space: nowrap;
+}
+
+/* The Ride button's small "Ride in" line above the payoff. */
+.ride .kicker {
+  display: block;
+  margin-bottom: 1px;
+  font:
+    600 11px / 1.2 Inter,
+    sans-serif;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.6;
+}
+
+.actions {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.ride,
+.ghost {
+  padding: 13px 16px;
+  border-radius: 14px;
+  font:
+    800 15px Outfit,
+    sans-serif;
+  transition:
+    transform 0.25s var(--ease),
+    background 0.25s var(--ease);
+}
+
+.ride {
+  width: 100%;
+  text-wrap: balance;
+  background: var(--dark);
+  color: var(--cream);
+}
+
+.ghost {
+  background: rgb(29 31 36 / 0.08);
+  color: var(--dark);
+}
+
+.ride:hover,
+.ghost:hover {
+  transform: translateY(-1px);
+}
+
+.ride[aria-disabled="true"] {
+  opacity: 0.5;
+}
+
+/* ── Adit's bubble ───────────────────────────────────────────────────── */
+
+.bubble {
+  position: absolute;
+  left: var(--gutter);
+  bottom: var(--gutter);
+  max-width: 320px;
+  padding: 12px 16px;
+  border-radius: 18px 18px 18px 6px;
+  background: var(--cream);
+  color: var(--dark);
+  box-shadow: 0 12px 32px rgb(0 0 0 / 0.3);
+  animation: pop 0.5s var(--ease) both;
+}
+
+.bubble b {
+  display: block;
+  font:
+    800 11px Outfit,
+    sans-serif;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #8a2a22;
+}
+
+.bubble p {
+  margin: 2px 0 0;
+}
+
+/* ── inspect ─────────────────────────────────────────────────────────── */
+
+.back {
+  position: absolute;
+  left: var(--gutter);
+  top: 84px;
+  padding: 9px 16px;
+  border-radius: 999px;
+  background: var(--glass);
+  backdrop-filter: blur(10px);
+  font:
+    700 14px Outfit,
+    sans-serif;
+  animation: rise 0.5s var(--ease) both;
+}
+
+.spin {
+  position: absolute;
+  left: calc((100% - var(--panel-w) - var(--gutter)) / 2);
+  bottom: 28px;
+  translate: -50% 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 18px 8px 8px;
+  border-radius: 999px;
+  background: var(--glass);
+  backdrop-filter: blur(12px);
+  white-space: nowrap;
+  pointer-events: none;
+  animation: rise 0.6s 0.1s var(--ease) both;
+}
+
+.spin b {
+  font:
+    700 14px Outfit,
+    sans-serif;
+}
+
+.spin span:last-child {
+  font-size: 12px;
+  color: var(--ink-dim);
+}
+
+.dial {
+  --a: 0deg;
+  position: relative;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: conic-gradient(var(--accent) var(--a), rgb(255 255 255 / 0.15) 0);
+}
+
+.dial::after {
+  content: "↻";
+  position: absolute;
+  inset: 4px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: #241e19;
+  font-size: 15px;
+}
+
+.panel.inspect {
+  top: auto;
+  background: none;
+  backdrop-filter: none;
+  padding: 0;
+}
+
+.panel.inspect .card {
+  margin: 0;
+}
+
+.cycle {
+  display: grid;
+  grid-template-columns: 32px 1fr 32px;
+  align-items: center;
+  text-align: center;
+}
+
+.cycle button {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: rgb(29 31 36 / 0.08);
+  color: var(--dark);
+  font-size: 20px;
+  line-height: 1;
+}
+
+.feel {
+  margin: 12px 0 14px;
+  display: grid;
+  gap: 6px;
+}
+
+.feel div {
+  display: grid;
+  grid-template-columns: 56px 1fr;
+  align-items: center;
+  gap: 10px;
+}
+
+.feel dt {
+  font-size: 12px;
+  opacity: 0.7;
+}
+
+.feel dd {
+  margin: 0;
+  height: 6px;
+  border-radius: 3px;
+  background: rgb(0 0 0 / 0.1);
+  overflow: hidden;
+}
+
+.feel i {
+  display: block;
+  height: 100%;
+  width: calc(var(--v) * 100%);
+  border-radius: 3px;
+  background: var(--tint);
+  transition: width 0.6s var(--ease);
+}
+
+/* ── passport ────────────────────────────────────────────────────────── */
+
+.topbar nav {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.chip {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  padding: 9px 14px;
+  border-radius: 999px;
+  background: var(--glass);
+  backdrop-filter: blur(10px);
+  font:
+    700 14px Inter,
+    sans-serif;
+  transition: background 0.25s var(--ease);
+}
+
+.chip[aria-pressed="true"] {
+  background: #1e3b2c;
+}
+
+.chip .count {
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 0.14);
+  font-size: 12px;
+}
+
+.panel.passport h2 {
+  margin: 4px 0 0;
+  font:
+    900 28px Outfit,
+    sans-serif;
+}
+
+.panel.passport .lede {
+  margin: 6px 0 0;
+  color: var(--ink-dim);
+  font-size: 14px;
+}
+
+.stamps {
+  margin: 14px 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 4px;
+  overflow: auto;
+}
+
+.stamps li {
+  display: grid;
+  grid-template-columns: 14px 1fr;
+  column-gap: 10px;
+  padding: 8px 12px;
+  border-radius: 14px;
+  background: rgb(255 255 255 / 0.04);
+}
+
+.stamps li.has {
+  background: color-mix(in srgb, var(--tint) 22%, transparent);
+}
+
+.stamps .mark {
+  grid-row: span 2;
+  align-self: center;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 2px dashed var(--tint);
+}
+
+.stamps li.has .mark {
+  border-style: solid;
+  background: var(--tint);
+}
+
+.stamps li > b {
+  font:
+    700 14px Outfit,
+    sans-serif;
+}
+
+.stamps .note {
+  font-size: 12px;
+  color: var(--ink-dim);
+}
+
+.panel.passport .ride {
+  margin-top: auto;
+}
+
+/* ── toast ───────────────────────────────────────────────────────────── */
+
+.toast {
+  position: absolute;
+  left: 50%;
+  top: 84px;
+  translate: -50% -12px;
+  padding: 10px 18px;
+  border-radius: 999px;
+  background: var(--cream);
+  color: var(--dark);
+  font-weight: 600;
+  box-shadow: 0 10px 30px rgb(0 0 0 / 0.3);
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    opacity 0.3s var(--ease),
+    translate 0.4s var(--ease);
+}
+
+.toast.on {
+  opacity: 1;
+  translate: -50% 0;
+}
+
+/* ── riding a world ──────────────────────────────────────────────────── */
+
+.ridehud {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.ridehud > * {
+  pointer-events: auto;
+}
+
+kbd {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 6px;
+  background: rgb(255 255 255 / 0.14);
+  font:
+    700 11px Inter,
+    sans-serif;
+  letter-spacing: 0.04em;
+}
+
+.found {
+  position: absolute;
+  left: 50%;
+  top: max(18px, env(safe-area-inset-top));
+  translate: -50% 0;
+  display: grid;
+  grid-template-columns: auto auto;
+  column-gap: 10px;
+  align-items: baseline;
+  padding: 8px 16px 9px;
+  border-radius: 18px;
+  background: var(--glass);
+  backdrop-filter: blur(12px);
+  white-space: nowrap;
+  animation: rise 0.6s var(--ease) both;
+}
+
+.ridehud .found b {
+  font:
+    800 15px Outfit,
+    sans-serif;
+}
+
+.ridehud .found span {
+  font-size: 12px;
+  color: var(--ink-dim);
+}
+
+.pips {
+  grid-column: span 2;
+  display: flex;
+  justify-content: center;
+  gap: 4px;
+  margin-top: 5px;
+}
+
+.pips em {
+  width: 14px;
+  height: 4px;
+  border-radius: 2px;
+  background: rgb(255 255 255 / 0.18);
+  transition: background 0.5s var(--ease);
+}
+
+.pips em.on {
+  background: var(--tint);
+}
+
+.ridehint {
+  position: absolute;
+  left: 50%;
+  bottom: 28px;
+  translate: -50% 0;
+  margin: 0;
+  padding: 9px 16px;
+  border-radius: 999px;
+  background: var(--glass);
+  backdrop-filter: blur(12px);
+  font-size: 13px;
+  white-space: nowrap;
+  pointer-events: none;
+  animation: rise 0.6s 0.4s var(--ease) both;
+}
+
+.pullover {
+  position: absolute;
+  left: 50%;
+  bottom: 84px;
+  translate: -50% 0;
+  display: grid;
+  grid-template-columns: auto auto;
+  column-gap: 12px;
+  align-items: center;
+  padding: 10px 14px 10px 18px;
+  border-radius: 18px;
+  background: var(--cream);
+  color: var(--dark);
+  box-shadow: 0 14px 34px rgb(0 0 0 / 0.3);
+  text-align: left;
+  animation: pop 0.45s var(--ease) both;
+}
+
+.ridehud .pullover .kicker {
+  grid-column: 1;
+  font:
+    600 11px Inter,
+    sans-serif;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--tint);
+}
+
+.ridehud .pullover b {
+  grid-column: 1;
+  font:
+    800 18px Outfit,
+    sans-serif;
+}
+
+.ridehud .pullover kbd {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  background: rgb(29 31 36 / 0.1);
+  padding: 4px 9px;
+  font-size: 13px;
+}
+
+.cruising {
+  position: absolute;
+  left: 50%;
+  top: 80px;
+  translate: -50% 0;
+  margin: 0;
+  padding: 7px 14px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--tint) 70%, #000);
+  font-size: 13px;
+  white-space: nowrap;
+  animation: rise 0.5s var(--ease) both;
+}
+
+.mapbox {
+  position: absolute;
+  right: var(--gutter);
+  bottom: var(--gutter);
+  display: grid;
+  gap: 8px;
+  /* As wide as the map (plus padding): the progress and Cruise fit to it. */
+  width: min-content;
+  justify-items: center;
+  padding: 8px;
+  border-radius: 24px;
+  background: var(--glass);
+  backdrop-filter: blur(12px);
+  animation: rise 0.6s 0.15s var(--ease) both;
+}
+
+.ridehud:has(.stopcard) .mapbox,
+.ridehud:has(.stopcard) .found {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* The round paper compass (drawn on its canvas, ring and all). */
+.minimap {
+  display: block;
+  width: 168px;
+  height: 168px;
+  border-radius: 50%;
+  background: transparent;
+  filter: drop-shadow(5px 6px 0 rgb(58 47 77 / 0.16));
+  cursor: pointer;
+}
+
+.cruise {
+  padding: 9px 12px;
+  border-radius: 14px;
+  background: var(--cream);
+  color: var(--dark);
+  font:
+    800 13px Outfit,
+    sans-serif;
+  transition:
+    transform 0.25s var(--ease),
+    background 0.25s var(--ease);
+}
+
+.cruise[aria-pressed="true"] {
+  background: var(--accent);
+}
+
+.cruise:hover {
+  transform: translateY(-1px);
+}
+
+.speed {
+  margin: 0;
+  text-align: center;
+  font-size: 11px;
+  color: var(--ink-dim);
+}
+
+.ridehud .speed b {
+  font:
+    800 16px Outfit,
+    sans-serif;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.tools {
+  position: absolute;
+  left: var(--gutter);
+  top: 84px;
+  display: flex;
+  gap: 6px;
+  animation: rise 0.6s 0.2s var(--ease) both;
+}
+
+.tool {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  min-width: 36px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: var(--glass);
+  backdrop-filter: blur(10px);
+  font:
+    700 13px Inter,
+    sans-serif;
+  transition: background 0.25s var(--ease);
+}
+
+.tool[aria-pressed="true"] {
+  background: #1e3b2c;
+}
+
+.pullover.live .kicker {
+  color: #2f7d4f;
+}
+
+/* The stop card: a café menu. */
+
+.panel.stopcard {
+  gap: 10px;
+}
+
+.stopcard .card.menu {
+  margin: 0;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  outline: none;
+  scrollbar-width: thin;
+}
+
+.menuhead {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.close {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: rgb(29 31 36 / 0.08);
+  color: var(--dark);
+  font-size: 20px;
+  line-height: 1;
+}
+
+.menu .drink {
+  margin: 2px 0 0;
+  font:
+    italic 500 14px Georgia,
+    serif;
+  color: color-mix(in srgb, var(--tint) 75%, #000);
+}
+
+.menu .tagline {
+  margin: 10px 0 0;
+  font:
+    700 15px / 1.4 Outfit,
+    sans-serif;
+}
+
+.menu p,
+.menu li {
+  font-size: 14px;
+  line-height: 1.55;
+  color: rgb(29 31 36 / 0.85);
+}
+
+.menu ul {
+  margin: 8px 0 0;
+  padding-left: 18px;
+}
+
+.menu li + li {
+  margin-top: 4px;
+}
+
+.facts {
+  margin: 12px 0 4px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.facts div {
+  padding: 8px 10px;
+  border-radius: 12px;
+  background: rgb(29 31 36 / 0.05);
+}
+
+.facts dt {
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  opacity: 0.6;
+}
+
+.facts dd {
+  margin: 1px 0 0;
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.menu ul.tech {
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.menu .tech li {
+  margin: 0;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--tint) 14%, transparent);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.menu .links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 14px 0 0;
+}
+
+.menu .links a {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 12px;
+  border-radius: 12px;
+  background: var(--dark);
+  color: var(--cream);
+  font:
+    700 13px Inter,
+    sans-serif;
+  text-decoration: none;
+}
+
+.menu .intro {
+  margin: 14px 0 0;
+  padding-top: 12px;
+  border-top: 1px dashed rgb(29 31 36 / 0.2);
+  font-size: 13px;
+  color: rgb(29 31 36 / 0.65);
+}
+
+.stopcard .actions {
+  margin: 0;
+}
+
+.stopcard .ghost {
+  background: rgb(255 255 255 / 0.1);
+  color: var(--ink);
+}
+
+.loader.is-ride {
+  background: #2b2723;
+}
+
+/* ── ride ritual: skip, waiting over the map, the veil ──────────────── */
+
+/* The whole scene is the skip target; the top bar stays above it. */
+.ritual-skip {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: grid;
+  align-items: end;
+  justify-items: center;
+  padding: 0 0 max(22px, env(safe-area-inset-bottom));
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.ritual-skip .hint {
+  padding: 7px 14px;
+  border-radius: 999px;
+  background: rgb(24 20 16 / 0.5);
+  color: var(--ink-dim);
+  font:
+    600 13px Inter,
+    system-ui,
+    sans-serif;
+  letter-spacing: 0.02em;
+  opacity: 0;
+  animation: ritual-hint 0.5s 0.9s var(--ease) forwards;
+}
+
+.ritual-skip:hover .hint,
+.ritual-skip:focus-visible .hint {
+  color: var(--ink);
+}
+
+@keyframes ritual-hint {
+  to {
+    opacity: 1;
+  }
+}
+
+.ritual-hold {
+  position: absolute;
+  left: 50%;
+  bottom: max(28px, env(safe-area-inset-bottom));
+  width: 36px;
+  height: 36px;
+  translate: -50% 0;
+  pointer-events: none;
+}
+
+.ritual-hold svg {
+  width: 100%;
+  height: 100%;
+  rotate: -90deg;
+}
+
+.ritual-hold circle {
+  fill: none;
+  stroke-width: 3;
+}
+
+.ritual-hold .track {
+  stroke: rgb(244 237 226 / 0.2);
+}
+
+.ritual-hold .fill {
+  stroke: var(--accent);
+  stroke-linecap: round;
+  transition: stroke-dasharray 0.3s var(--ease);
+}
+
+/* The wash of the world's sky colour over the hand-over (VEIL_IN in app.ts). */
+.veil {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.5s ease-out;
+}
+
+.veil.is-on {
+  opacity: 1;
+  transition-duration: 0.32s;
+  transition-timing-function: ease-in;
+}
+
+/* ── loader: fuel gauge ──────────────────────────────────────────────── */
+
+.loader {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 8px;
+  background: #2b2723;
+  transition:
+    opacity 0.6s var(--ease),
+    visibility 0.6s;
+}
+
+.loader.is-done {
+  opacity: 0;
+  visibility: hidden;
+}
+
+.gauge {
+  width: 200px;
+}
+
+.gauge .arc,
+.gauge .fill {
+  fill: none;
+  stroke-width: 10;
+  stroke-linecap: round;
+}
+
+.gauge .arc {
+  stroke: rgb(255 255 255 / 0.12);
+}
+
+.gauge .fill {
+  stroke: var(--accent);
+  transition: stroke-dasharray 0.4s var(--ease);
+}
+
+.gauge text {
+  fill: var(--ink-dim);
+  font:
+    700 14px Outfit,
+    sans-serif;
+}
+
+.gauge .needle {
+  stroke: var(--ink);
+  stroke-width: 4;
+  stroke-linecap: round;
+}
+
+.gauge g {
+  transition: transform 0.4s var(--ease);
+}
+
+.gauge .hub {
+  fill: var(--ink);
+}
+
+.loader p {
+  margin: 0;
+  color: var(--ink-dim);
+}
+
+/* ── motion ──────────────────────────────────────────────────────────── */
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+}
+
+@keyframes swap {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+}
+
+@keyframes pop {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.96);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    /* biome-ignore lint/complexity/noImportantStyles: reduced motion must override every component */
+    animation-duration: 0.01ms !important;
+    /* biome-ignore lint/complexity/noImportantStyles: reduced motion must override every component */
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ── narrow / portrait: the panel becomes a bottom sheet ─────────────── */
+
+@media not (
+    ((min-width: 900px) and (min-aspect-ratio: 11 / 10)) or (
+      (max-height: 520px) and (min-aspect-ratio: 16 / 10)
+    )
+  ) {
+  :root {
+    --gutter: 14px;
+    --panel-w: 0px;
+  }
+
+  .brand span {
+    display: none;
+  }
+
+  .panel {
+    left: 10px;
+    right: 10px;
+    top: auto;
+    bottom: max(10px, env(safe-area-inset-bottom));
+    width: auto;
+    max-height: var(--sheet-h);
+    padding: 12px 12px 12px;
+    border-radius: 26px;
+    background: var(--glass-strong);
+  }
+
+  .panel > .eyebrow {
+    display: none;
+  }
+
+  .worlds {
+    margin: 0;
+    grid-auto-flow: column;
+    grid-auto-columns: max-content;
+    overflow-x: auto;
+    gap: 6px;
+    scroll-snap-type: x mandatory;
+  }
+
+  .worlds li {
+    scroll-snap-align: start;
+  }
+
+  .world {
+    padding: 8px 12px;
+    background: rgb(255 255 255 / 0.06);
+  }
+
+  .world span {
+    display: none;
+  }
+
+  .panel > .card {
+    margin-top: 10px;
+  }
+
+  .card h2 {
+    font-size: 24px;
+  }
+
+  .card .lede,
+  .card .where {
+    display: none;
+  }
+
+  .bubble {
+    display: none;
+  }
+
+  .spin {
+    left: auto;
+    right: var(--gutter);
+    bottom: auto;
+    top: 80px;
+    translate: none;
+  }
+
+  .spin span:last-child {
+    display: none;
+  }
+
+  .panel.inspect {
+    max-height: none;
+  }
+
+  .panel.passport {
+    max-height: 52dvh;
+  }
+
+  .chip {
+    padding: 8px 11px;
+  }
+}
+
+/* ── riding on phones ────────────────────────────────────────────────── */
+
+@media not (
+    ((min-width: 900px) and (min-aspect-ratio: 11 / 10)) or (
+      (max-height: 520px) and (min-aspect-ratio: 16 / 10)
+    )
+  ) {
+  .mode-world .topbar .brand span {
+    display: none;
+  }
+
+  .found {
+    top: 72px;
+    left: auto;
+    right: var(--gutter);
+    translate: none;
+    padding: 6px 12px 7px;
+  }
+
+  .mapbox {
+    right: 10px;
+    bottom: max(14px, env(safe-area-inset-bottom));
+    padding: 6px;
+    border-radius: 20px;
+  }
+
+  .ridehud.is-touch .mapbox {
+    top: 122px;
+  }
+
+  .tools {
+    top: 72px;
+  }
+
+  .minimap {
+    width: 104px;
+    height: 104px;
+  }
+
+  .cruise {
+    font-size: 12px;
+    padding: 8px 8px;
+  }
+
+  .ridehint {
+    bottom: 250px;
+    top: auto;
+    white-space: normal;
+    width: max-content;
+    max-width: calc(100% - 40px);
+    text-align: center;
+  }
+
+  .pullover {
+    bottom: 176px;
+  }
+
+  .panel.stopcard {
+    max-height: 64dvh;
+    background: var(--glass-strong);
+  }
+
+  .cruising {
+    top: 168px;
+    left: var(--gutter);
+    translate: none;
+  }
+}
+
+/* Tilt riding: the whole left half brakes, the right half rides. */
+
+.ridehud > * {
+  z-index: 1;
+}
+
+.ridehud > .halves {
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+
+.halves.paused {
+  pointer-events: none;
+  opacity: 0;
+}
+
+.half {
+  position: relative;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.pedalvis {
+  position: absolute;
+  bottom: max(22px, env(safe-area-inset-bottom));
+  display: grid;
+  place-items: center;
+  width: 96px;
+  height: 96px;
+  border-radius: 50%;
+  background: rgb(210 210 210 / 0.26);
+  border: 1.5px solid rgb(255 255 255 / 0.35);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  color: #fff;
+  font:
+    800 15px Outfit,
+    sans-serif;
+  text-shadow: 0 1px 4px rgb(0 0 0 / 0.35);
+  transition:
+    transform 0.12s var(--ease),
+    background 0.2s var(--ease);
+}
+
+.half.brake .pedalvis {
+  left: max(22px, env(safe-area-inset-left));
+  width: 80px;
+  height: 80px;
+}
+
+.half.go .pedalvis {
+  right: max(22px, env(safe-area-inset-right));
+}
+
+.pedalvis.on {
+  transform: scale(0.94);
+  background: rgb(230 230 230 / 0.45);
+}
+
+.rotategate,
+.tiltstart {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 10px;
+  padding: 24px;
+  text-align: center;
+  background: rgb(24 20 16 / 0.82);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  animation: rise 0.5s var(--ease) both;
+}
+
+.ridehud > .rotategate,
+.ridehud > .tiltstart {
+  z-index: 5;
+}
+
+.ridehud .rotategate h2,
+.ridehud .tiltstart h2 {
+  margin: 8px 0 0;
+  font:
+    900 24px / 1.15 Outfit,
+    sans-serif;
+}
+
+.ridehud .rotategate p,
+.ridehud .tiltstart p {
+  margin: 0;
+  max-width: 300px;
+  color: var(--ink-dim);
+}
+
+.gateactions {
+  display: flex;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.ridehud .rotategate .ghost {
+  padding: 11px 16px;
+  border-radius: 14px;
+  background: rgb(255 255 255 / 0.12);
+  color: var(--ink);
+}
+
+.ridehud .tiltstart .ride {
+  width: auto;
+  margin-top: 6px;
+  padding: 13px 26px;
+}
+
+.linkish {
+  padding: 8px;
+  color: var(--ink-dim);
+  font-size: 13px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* A phone turning from portrait to landscape. */
+.phoneicon {
+  width: 46px;
+  height: 78px;
+  border: 3px solid var(--ink);
+  border-radius: 11px;
+  position: relative;
+  animation: turn 2.4s var(--ease) infinite;
+}
+
+.phoneicon i {
+  position: absolute;
+  left: 50%;
+  bottom: 5px;
+  width: 12px;
+  height: 3px;
+  translate: -50% 0;
+  border-radius: 2px;
+  background: var(--ink);
+}
+
+@keyframes turn {
+  0%,
+  25% {
+    transform: rotate(0deg);
+  }
+  55%,
+  100% {
+    transform: rotate(-90deg);
+  }
+}
+
+/* Handlebars rocking side to side. */
+.bars {
+  width: 120px;
+  height: 46px;
+  display: grid;
+  place-items: center;
+  animation: rock 2.2s ease-in-out infinite;
+}
+
+.bars i {
+  width: 110px;
+  height: 8px;
+  border-radius: 4px;
+  background: var(--ink);
+  box-shadow:
+    -48px 0 0 4px var(--ink),
+    48px 0 0 4px var(--ink);
+}
+
+@keyframes rock {
+  0%,
+  100% {
+    transform: rotate(-14deg);
+  }
+  50% {
+    transform: rotate(14deg);
+  }
+}
+
+/* Touch screens: the map moves up out of the right thumb's way. */
+.ridehud.is-touch .mapbox {
+  top: 76px;
+  bottom: auto;
+}
+
+.ridehud.is-touch .speed {
+  display: none;
+}
+
+@media (max-height: 520px) {
+  .minimap {
+    width: 104px;
+    height: 104px;
+  }
+
+  .tools {
+    top: 70px;
+  }
+
+  .pullover {
+    bottom: 26px;
+  }
+
+  .ridehint {
+    bottom: auto;
+    top: 124px;
+  }
+
+  .ridehud.is-touch .found {
+    top: 76px;
+  }
+}
+
+/* ── short, wide screens (phones held sideways): a compact side panel ─── */
+
+@media (max-height: 520px) {
+  .panel {
+    top: 68px;
+    bottom: auto;
+    max-height: calc(100dvh - 78px);
+    padding: 10px;
+    border-radius: 22px;
+  }
+
+  .panel > .eyebrow,
+  .bubble {
+    display: none;
+  }
+
+  /* The list comes first: just the journeys, one per row. */
+  .worlds {
+    margin: 0;
+    gap: 2px;
+  }
+
+  .world {
+    padding: 6px 10px;
+  }
+
+  .world span,
+  .card .lede,
+  .card .where {
+    display: none;
+  }
+
+  .panel > .card {
+    margin-top: 8px;
+  }
+
+  .panel .card {
+    padding: 12px;
+  }
+
+  .card h2 {
+    font-size: 22px;
+  }
+
+  .topbar {
+    padding-top: max(12px, env(safe-area-inset-top));
+  }
+
+  .feel {
+    margin: 6px 0 8px;
+    gap: 3px;
+  }
+}
+
+@media (max-height: 520px) {
+  :root {
+    --panel-w: min(320px, 38vw);
+  }
+
+  .panel.inspect {
+    top: auto;
+    bottom: max(10px, env(safe-area-inset-bottom));
+  }
+}
+
+/* Touch: the map waits behind an "i" in the top right. */
+
+.infobox {
+  position: absolute;
+  right: var(--gutter);
+  top: 76px;
+  display: grid;
+  justify-items: end;
+  gap: 8px;
+}
+
+.infobtn {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--glass);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  font:
+    italic 800 18px Georgia,
+    serif;
+}
+
+.infobtn[aria-expanded="true"] {
+  font:
+    700 22px Inter,
+    sans-serif;
+}
+
+.ridehud .mapbox.popover {
+  position: static;
+  animation: pop 0.35s var(--ease) both;
+}
+
+/* One height for the top-row buttons: Garage, Résumé, camera, "i". */
+.topbar .chip,
+.resume,
+.ridehud .tool,
+.ridehud .infobtn {
+  height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding-block: 0;
+}
+
+.ridehud .tool {
+  padding-inline: 14px;
+  font:
+    700 14px Inter,
+    sans-serif;
+}
+
+.ridehud .infobtn {
+  width: 40px;
+  padding: 0;
+}
+
+/* The progress sits at the top of the map panel (and of the "i" pop-over on touch). */
+.ridehud .mapbox .found {
+  position: static;
+  translate: none;
+  justify-self: stretch;
+  min-width: 0;
+  /* Stacked and centred (name, then the count, then the bars): fits the map's width. */
+  grid-template-columns: minmax(0, 1fr);
+  justify-items: center;
+  row-gap: 1px;
+  text-align: center;
+  white-space: nowrap;
+  padding: 4px 6px 2px;
+  background: none;
+  backdrop-filter: none;
+  animation: none;
+}
+
+.ridehud .mapbox .cruise {
+  justify-self: stretch;
+}
+
+.ridehud .mapbox .pips {
+  grid-column: auto;
+  justify-self: stretch;
+}
+
+/* The progress bars shrink to fit a small map. */
+.ridehud .mapbox .pips em {
+  width: auto;
+  flex: 1 1 0;
+  min-width: 4px;
+  max-width: 14px;
+}
+
+/* ── The yard (the opening) ──────────────────────────────────────────────
+ * The plot is the centrepiece: nothing covers it. The picked bike's card is a
+ * short caption bar along the bottom (name · what it is · Ride), always in
+ * the same place; the round passport button sits in the bottom-left corner;
+ * the top bar runs across the top. Keep the bar's height in step with
+ * LineupScene.resize, which keeps that band free when it frames the plot.
+ * Cream paper with the same soft offset shadow as the toys' shadows. */
+
+.ui .yard-card {
+  --side: var(--gutter);
+  position: absolute;
+  left: 50%;
+  translate: -50% 0;
+  bottom: max(var(--gutter), env(safe-area-inset-bottom));
+  width: min(920px, calc(100vw - 2 * var(--side)));
+  min-height: 92px;
+  display: grid;
+  grid-template-columns: minmax(150px, auto) 1fr auto;
+  align-items: center;
+  gap: 8px 24px;
+  padding: 18px 22px 16px;
+  border-radius: 22px;
+  background: #fffaf3;
+  color: #3a2f4d;
+  box-shadow: 8px 10px 0 rgb(58 47 77 / 0.14);
+  overflow: hidden;
+  animation: swap 0.45s var(--ease) both;
+}
+
+.ui .yard-card.hello {
+  grid-template-columns: minmax(150px, auto) 1fr;
+}
+
+.ui .yard-card::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: 7px;
+  background: var(--band);
+}
+
+.ui .yard-card .eyebrow {
+  margin: 0;
+  color: color-mix(in srgb, var(--band) 55%, #3a2f4d);
+}
+
+.ui .yard-card h2 {
+  margin: 2px 0 0;
+  font:
+    800 26px / 1.1 Outfit,
+    sans-serif;
+  white-space: nowrap;
+}
+
+.ui .yard-card .lede {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.45;
+  color: #4a4060;
+}
+
+.ui .yard-card .bike {
+  margin: 4px 0 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: #6b6280;
+}
+
+.ui .yard-card .ride {
+  width: auto;
+  min-width: 190px;
+  padding: 11px 18px;
+  background: #fa9a87;
+  color: #3a2f4d;
+  box-shadow: 0 5px 0 color-mix(in srgb, #fa9a87 70%, #3a2f4d);
+}
+
+.ui .yard-card .ride[aria-disabled="true"] {
+  background: #ded6cb;
+  box-shadow: 0 5px 0 color-mix(in srgb, #ded6cb 70%, #3a2f4d);
+  opacity: 1;
+}
+
+/* The card's dock: while the passport is out the card slides down off the
+ * frame (unhurried, gathering pace as it goes), and rises back as the passport leaves. */
+.ui .yard-dock {
+  position: absolute;
+  inset: 0;
+  /* Above the passport's dimmed backdrop, so the card is seen sliding the
+   * whole way (not fading out under the dim). */
+  z-index: 21;
+  pointer-events: none;
+  transition: transform 0.75s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.ui .yard-dock > * {
+  pointer-events: auto;
+}
+
+.ui .yard-dock.away {
+  transform: translateY(calc(260px + env(safe-area-inset-bottom)));
+  /* Moves from the first frame, easing in and out: a glide, not a drop. */
+  transition: transform 0.6s cubic-bezier(0.65, 0, 0.35, 1);
+}
+
+.passport-book {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+}
+
+.passport-book canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+  cursor: pointer;
+}
+
+/* The yard is a light scene: the top bar's text reads dark over it. */
+.mode-garage .topbar {
+  color: #3a2f4d;
+}
+
+.mode-garage .topbar {
+  background: none;
+}
+
+.mode-garage .topbar .brand span {
+  color: rgb(58 47 77 / 0.6);
+}
+
+/* ── The yard on small screens ───────────────────────────────────────────
+ * Short screens (phones held sideways): a slimmer top bar and a slimmer bar,
+ * description to two lines; narrow ones drop the description altogether.
+ * Phones held upright: a full-screen note asking for landscape. Small or
+ * touch screens get the full-screen button. */
+
+/* Round icon buttons in the top bar (full screen, passport), before Résumé. */
+.icon-btn {
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: rgb(58 47 77 / 0.08);
+  color: #3a2f4d;
+  transition:
+    transform 0.2s var(--ease),
+    background 0.2s var(--ease);
+}
+
+.icon-btn:hover {
+  background: rgb(58 47 77 / 0.14);
+  transform: translateY(-1px);
+}
+
+@media (max-height: 520px) {
+  .icon-btn {
+    width: 34px;
+    height: 34px;
+  }
+}
+
+.rotate-hint {
+  display: none;
+}
+
+@media (orientation: portrait) and (pointer: coarse) {
+  .rotate-hint {
+    position: fixed;
+    inset: 0;
+    z-index: 30;
+    display: grid;
+    place-content: center;
+    justify-items: center;
+    gap: 10px;
+    padding: 32px;
+    text-align: center;
+    background: #f6efe6;
+    color: #3a2f4d;
+  }
+
+  .rotate-hint h2 {
+    margin: 12px 0 0;
+    font:
+      800 24px / 1.2 Outfit,
+      sans-serif;
+  }
+
+  .rotate-hint p {
+    margin: 0;
+    font-size: 15px;
+    color: #6b6280;
+  }
+
+  .rotate-hint .phone {
+    width: 46px;
+    height: 78px;
+    border: 3px solid #3a2f4d;
+    border-radius: 10px;
+    position: relative;
+    animation: turn-phone 2.4s var(--ease) infinite;
+  }
+
+  .rotate-hint .phone i {
+    position: absolute;
+    left: 50%;
+    bottom: 6px;
+    width: 12px;
+    height: 3px;
+    translate: -50% 0;
+    border-radius: 2px;
+    background: #3a2f4d;
+  }
+}
+
+@keyframes turn-phone {
+  0%,
+  25% {
+    rotate: 0deg;
+  }
+
+  55%,
+  100% {
+    rotate: -90deg;
+  }
+}
+
+@media (max-height: 520px) {
+  .mode-garage .topbar {
+    padding: max(10px, env(safe-area-inset-top)) max(14px, env(safe-area-inset-right)) 0
+      max(14px, env(safe-area-inset-left));
+  }
+
+  .mode-garage .topbar .brand b {
+    font-size: 15px;
+  }
+
+  .mode-garage .topbar .resume {
+    padding: 7px 12px;
+    font-size: 13px;
+  }
+
+  .ui .yard-card {
+    --side: max(12px, env(safe-area-inset-left));
+    bottom: max(10px, env(safe-area-inset-bottom));
+    min-height: 0;
+    gap: 4px 16px;
+    padding: 12px 16px 11px;
+    border-radius: 16px;
+    box-shadow: 6px 8px 0 rgb(58 47 77 / 0.14);
+  }
+
+  .ui .yard-card::before {
+    height: 5px;
+  }
+
+  .ui .yard-card .eyebrow {
+    font-size: 10px;
+  }
+
+  .ui .yard-card h2 {
+    font-size: 19px;
+  }
+
+  .ui .yard-card .lede {
+    font-size: 12.5px;
+    line-height: 1.35;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .ui .yard-card .bike,
+  .ui .yard-card .ride .kicker {
+    display: none;
+  }
+
+  .ui .yard-card .ride {
+    min-width: 0;
+    padding: 9px 14px;
+    font-size: 13.5px;
+    border-radius: 12px;
+  }
+}
+
+@media (max-width: 720px) {
+  /* A picked bike's card keeps its name and Ride; the hello keeps its one instruction. */
+  .ui .yard-card:not(.hello) .what {
+    display: none;
+  }
+
+  .ui .yard-card:not(.hello) {
+    grid-template-columns: 1fr auto;
+  }
+
+  .ui .yard-card.hello {
+    grid-template-columns: auto 1fr;
+  }
+}
+
+/* ── night ────────────────────────────────────────────────────────────── */
+/* Night (the day/night toggle, N): the world is graded by the stage's night
+ * pass; the UI follows. Every night colour is a blend between its day and
+ * night colour by one number, --nt (0 day … 1 night), which eases over a few
+ * seconds (landing around blue hour). Backgrounds, text and icons all move
+ * together, both ways: nothing flips early or late. The coral Ride and the
+ * gold Résumé keep their colour. */
+
+@property --nt {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 0;
+}
+
+.app {
+  --nt: 0;
+  --night: calc(var(--nt) * 100%);
+  transition: --nt 2.4s ease 1.2s;
+}
+
+.app.is-night {
+  --nt: 1;
+}
+
+.app.mode-garage .topbar {
+  color: color-mix(in srgb, #3a2f4d, #f1e8d8 var(--night));
+}
+
+.app.mode-garage .topbar .brand span {
+  color: color-mix(in srgb, rgb(58 47 77 / 0.6), rgb(241 232 216 / 0.62) var(--night));
+}
+
+.app .icon-btn {
+  background: color-mix(in srgb, rgb(58 47 77 / 0.08), rgb(246 236 217 / 0.14) var(--night));
+  color: color-mix(in srgb, #3a2f4d, #f6ecd9 var(--night));
+}
+
+.app .icon-btn:hover {
+  background: color-mix(in srgb, rgb(58 47 77 / 0.14), rgb(246 236 217 / 0.22) var(--night));
+}
+
+.app :is(.card, .bubble, .toast, .pullover, .cruise) {
+  background: color-mix(in srgb, var(--cream), #2b2f4a var(--night));
+  color: color-mix(in srgb, var(--dark), #f1e8d8 var(--night));
+}
+
+.app .ui .yard-card {
+  background: color-mix(in srgb, #fffaf3, #2b2f4a var(--night));
+  color: color-mix(in srgb, #3a2f4d, #f1e8d8 var(--night));
+}
+
+.app .ui .yard-card .lede {
+  color: color-mix(in srgb, #4a4060, #f1e8d8 var(--night));
+}
+
+.app .ui .yard-card .bike {
+  color: color-mix(in srgb, #6b6280, #a9a1bb var(--night));
+}
+
+.app .ui .yard-card .ride[aria-disabled="true"] {
+  background: color-mix(in srgb, #ded6cb, #4a4e6a var(--night));
+  color: color-mix(in srgb, #3a2f4d, #f1e8d8 var(--night));
+}
+
+/* The minimap's paper dims to a night chart. */
+.app .minimap {
+  filter: drop-shadow(5px 6px 0 rgb(58 47 77 / 0.16)) brightness(calc(1 - 0.32 * var(--nt)))
+    saturate(calc(1 - 0.3 * var(--nt))) hue-rotate(calc(-8deg * var(--nt)));
+}
+
+/* The text inside the cards (stop cards, the panel cards). */
+.app .card .lede {
+  color: color-mix(in srgb, rgb(29 31 36 / 0.82), rgb(241 232 216 / 0.78) var(--night));
+}
+
+.app .card .where {
+  color: color-mix(in srgb, rgb(29 31 36 / 0.5), rgb(241 232 216 / 0.55) var(--night));
+}
+
+.app .menu :is(p, li) {
+  color: color-mix(in srgb, rgb(29 31 36 / 0.85), rgb(241 232 216 / 0.86) var(--night));
+}
+
+.app .menu .tagline {
+  color: color-mix(in srgb, var(--dark), #f6ecd9 var(--night));
+}
+
+.app .menu .drink {
+  color: color-mix(
+    in srgb,
+    color-mix(in srgb, var(--tint) 75%, #000),
+    color-mix(in srgb, var(--tint) 65%, #fff) var(--night)
+  );
+}
+
+.app .facts div {
+  background: color-mix(in srgb, rgb(29 31 36 / 0.05), rgb(246 236 217 / 0.07) var(--night));
+}
+
+.app .menu .tech li {
+  background: color-mix(
+    in srgb,
+    color-mix(in srgb, var(--tint) 14%, transparent),
+    color-mix(in srgb, var(--tint) 26%, transparent) var(--night)
+  );
+}
+
+.app .menu .links a {
+  background: color-mix(in srgb, var(--dark), #f1e8d8 var(--night));
+  color: color-mix(in srgb, var(--cream), #2b2f4a var(--night));
+}
+
+.app .menu .intro {
+  border-top-color: color-mix(in srgb, rgb(29 31 36 / 0.2), rgb(246 236 217 / 0.2) var(--night));
+  color: color-mix(in srgb, rgb(29 31 36 / 0.65), rgb(241 232 216 / 0.66) var(--night));
+}
+
+.app .close {
+  background: color-mix(in srgb, rgb(29 31 36 / 0.08), rgb(246 236 217 / 0.12) var(--night));
+  color: color-mix(in srgb, var(--dark), #f1e8d8 var(--night));
+}
