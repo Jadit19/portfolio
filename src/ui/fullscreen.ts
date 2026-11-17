@@ -19,6 +19,22 @@ export const canFullscreen = (): boolean =>
 export const inFullscreen = (): boolean =>
   Boolean(fsDoc().fullscreenElement || fsDoc().webkitFullscreenElement);
 
+/** Already running as an app from the Home Screen (no browser bars to hide). */
+export const fromHomeScreen = (): boolean =>
+  (window.matchMedia?.("(display-mode: fullscreen), (display-mode: standalone)").matches ??
+    false) ||
+  (navigator as Navigator & { standalone?: boolean }).standalone === true;
+
+/**
+ * iPhone (and other Apple touch devices without the full-screen API): the only
+ * way to lose the browser bars is to add the site to the Home Screen.
+ */
+export const homeScreenOnly = (): boolean =>
+  !canFullscreen() &&
+  !fromHomeScreen() &&
+  (/iP(hone|od|ad)/.test(navigator.userAgent) ||
+    (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1));
+
 /** Small or touch screens: where full screen is worth asking for. */
 export const smallScreen = (): boolean =>
   window.matchMedia?.("(max-height: 600px), (pointer: coarse)").matches ?? false;

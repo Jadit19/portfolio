@@ -1,10 +1,16 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { world } from "../content/worlds";
 import { app, leaveWorld, setNight } from "../state/app";
 import { useStore } from "../state/store";
 import { prefersReducedMotion } from "../three/anim";
 import { Arrow } from "./Arrow";
-import { canFullscreen, enterFullscreen, exitFullscreen, inFullscreen } from "./fullscreen";
+import {
+  canFullscreen,
+  enterFullscreen,
+  exitFullscreen,
+  homeScreenOnly,
+  inFullscreen,
+} from "./fullscreen";
 
 export const RESUME_URL = "https://resume.aditjain.me";
 
@@ -35,9 +41,31 @@ export function TopBar() {
   );
 }
 
+/** Two diagonal arrows: pointing out to go full screen, in to come back. */
+function FullscreenIcon({ on }: { on: boolean }) {
+  return (
+    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+      <g
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        {on ? (
+          <path d="M4 4l6 6M5 10h5V5M20 20l-6-6M19 14h-5v5" />
+        ) : (
+          <path d="M10 10L4 4M4 9V4h5M14 14l6 6M20 15v5h-5" />
+        )}
+      </g>
+    </svg>
+  );
+}
+
 /**
  * Full screen, for small screens where every pixel counts (shown by CSS only
- * on small or touch screens). Hidden where the browser can't do it (iPhone).
+ * on small or touch screens). On iPhone, which can't, it explains the Home
+ * Screen instead (see HomeScreenTip).
  */
 function FullscreenButton() {
   const [on, setOn] = useState(inFullscreen);
@@ -50,6 +78,7 @@ function FullscreenButton() {
       document.removeEventListener("webkitfullscreenchange", sync);
     };
   }, []);
+  if (homeScreenOnly()) return <HomeScreenTip />;
   if (!canFullscreen()) return null;
   return (
     <button
@@ -59,23 +88,129 @@ function FullscreenButton() {
       aria-pressed={on}
       onClick={() => void (on ? exitFullscreen() : enterFullscreen())}
     >
-      {/* Two diagonal arrows: pointing out to go full screen, in to come back. */}
-      <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
-        <g
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2.6"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          {on ? (
-            <path d="M4 4l6 6M5 10h5V5M20 20l-6-6M19 14h-5v5" />
-          ) : (
-            <path d="M10 10L4 4M4 9V4h5M14 14l6 6M20 15v5h-5" />
-          )}
-        </g>
-      </svg>
+      <FullscreenIcon on={on} />
     </button>
+  );
+}
+
+const TIP_SEEN = "portfolio:homescreen-tip";
+
+const ShareIcon = () => (
+  <svg className="tip-glyph" viewBox="0 0 16 16" aria-hidden="true">
+    <path
+      d="M8 10V2M5 4.5 8 1.5l3 3M4 7H3v7h10V7h-1"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+);
+
+const AddIcon = () => (
+  <svg className="tip-glyph" viewBox="0 0 16 16" aria-hidden="true">
+    <rect
+      x="2"
+      y="2"
+      width="12"
+      height="12"
+      rx="3"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+    />
+    <path d="M8 5v6M5 8h6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+  </svg>
+);
+
+/**
+ * iPhone Safari can't go full screen, but the site added to the Home Screen
+ * opens edge to edge. The full-screen button stays and opens these steps; the
+ * first visit they open once by themselves (H2 on the app-icon board).
+ */
+function HomeScreenTip() {
+  const [open, setOpen] = useState(false);
+  const wrap = useRef<HTMLSpanElement>(null);
+  const close = useCallback(() => {
+    setOpen(false);
+    try {
+      localStorage.setItem(TIP_SEEN, "1");
+    } catch {
+      // Storage blocked: it may show again next visit, which is fine.
+    }
+  }, []);
+  // The first visit: open once, after the yard has settled.
+  useEffect(() => {
+    let seen = false;
+    try {
+      seen = localStorage.getItem(TIP_SEEN) === "1";
+    } catch {
+      seen = false;
+    }
+    if (seen) return;
+    const t = setTimeout(() => {
+      setOpen(true);
+      try {
+        localStorage.setItem(TIP_SEEN, "1");
+      } catch {
+        // As above.
+      }
+    }, 1400);
+    return () => clearTimeout(t);
+  }, []);
+  // Closes on a tap anywhere else, or Esc.
+  useEffect(() => {
+    if (!open) return;
+    const down = (e: PointerEvent) => {
+      if (!wrap.current?.contains(e.target as Node)) close();
+    };
+    const key = (e: KeyboardEvent) => {
+      if (e.key === "Escape") close();
+    };
+    document.addEventListener("pointerdown", down);
+    document.addEventListener("keydown", key);
+    return () => {
+      document.removeEventListener("pointerdown", down);
+      document.removeEventListener("keydown", key);
+    };
+  }, [open, close]);
+  return (
+    <span className="tip-wrap" ref={wrap}>
+      <button
+        type="button"
+        className="icon-btn fs-btn"
+        aria-label="How to go full screen"
+        aria-expanded={open}
+        aria-controls="homescreen-tip"
+        onClick={() => (open ? close() : setOpen(true))}
+      >
+        <FullscreenIcon on={false} />
+      </button>
+      <div
+        id="homescreen-tip"
+        className={`tip-pop${open ? " is-open" : ""}`}
+        role="dialog"
+        aria-label="Full screen on iPhone"
+        aria-hidden={!open}
+      >
+        <b className="tip-title">Full screen on iPhone</b>
+        <ol>
+          <li>
+            Tap <ShareIcon /> <strong>Share</strong>
+          </li>
+          <li>
+            Tap <AddIcon /> <strong>Add to Home Screen</strong>
+          </li>
+          <li>
+            Open <strong>Adit Jain</strong> from your Home Screen
+          </li>
+        </ol>
+        <button type="button" className="tip-ok" onClick={close} tabIndex={open ? 0 : -1}>
+          Got it
+        </button>
+      </div>
+    </span>
   );
 }
 

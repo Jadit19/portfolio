@@ -48,6 +48,9 @@ Each world has its own `feel` (`speed`, `grip`, `lean`) in `src/content/worlds.t
 - Passport = a round icon button that opens a **booklet** with immigration-style stamps (varied shapes, tilted, wholly within one page).
 - Keys: arrows/WASD ride, E/Enter stop or ride, Esc closes a card / deselects, F full screen, P passport, N night toggle.
 - **The world builds only when the ride starts** (never on selection) — building in the background made the yard lag.
+- **Arrows in UI text are drawn, never characters.** Use `<Arrow dir="out|back|next" />` (`src/ui/Arrow.tsx`); iOS renders `↗ ← →` as colour emoji (it happened on the Résumé button).
+- **Full screen:** where the browser supports it, the top-bar button toggles it (and Ride enters it on small screens). **iPhone Safari can't**, so there the same button opens a three-step "Add to Home Screen" popover, once by itself on the first visit (`portfolio:homescreen-tip`), then on tap. The site is an installable web app (`public/manifest.webmanifest`, `display: fullscreen`, landscape; `apple-mobile-web-app-*` tags in `index.html`), so from the Home Screen it opens edge to edge. App icon = Murphy side-on in clay on linen (I1 on the `design/3d/appicon` board), exported to `public/apple-touch-icon.png` and `public/icons/`.
+- `index.html` links to files under `./public/…` (Bun's bundler resolves every `<link href>`; absolute `/…` paths fail the build).
 
 ## Superseded decisions (don't resurrect)
 Isometric dioramas, voxel/pixel art, the 2D canvas engine, paint shop, garage map table/turntable/jacket rack ritual, pin-board passport, planet-curved hilly terrain with haze. They appear in old notes; the flat toy world + dhaba yard replaced them.
