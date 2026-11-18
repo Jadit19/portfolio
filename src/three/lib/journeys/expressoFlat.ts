@@ -14,10 +14,12 @@ import {
   flatShape,
   footprint,
   grow,
+  instancedToys,
   mix,
   type Pt,
   paperShadow,
   ribbon,
+  type ToySlot,
   toy,
 } from "../../flat/kit";
 import {
@@ -282,7 +284,7 @@ function* build(scene: THREE.Scene): Generator<unknown, JourneyBuild, unknown> {
     key: string;
     slot: number;
   })[] = [];
-  const meshOf = new Map<string, THREE.InstancedMesh>();
+  const placed = new Map<string, ToySlot[]>();
   const blockers: WorldData["blockers"] = [];
   const ramps: Ramp[] = [];
   const pushables: NonNullable<WorldData["pushables"]> = [];
@@ -363,36 +365,14 @@ function* build(scene: THREE.Scene): Generator<unknown, JourneyBuild, unknown> {
     if (onRamp) blockers.splice(i, 1);
   }
   const m4 = new THREE.Matrix4();
-  const q = new THREE.Quaternion();
-  const up = new THREE.Vector3(0, 1, 0);
   let n = 0;
   for (const [k, ps] of groups) {
     const [id, tint] = k.split(":") as [string, string, string];
     const geo = toy(id, tint || undefined);
-    const mesh = new THREE.InstancedMesh(geo, mat, ps.length);
-    ps.forEach((p, i) => {
-      q.setFromAxisAngle(up, p.yaw);
-      mesh.setMatrixAt(
-        i,
-        m4.compose(
-          new THREE.Vector3(p.x, p.y, p.z),
-          q,
-          new THREE.Vector3(p.scale, p.scale, p.scale),
-        ),
-      );
-    });
-    mesh.computeBoundingSphere();
-    scene.add(mesh);
-    meshOf.set(k, mesh);
-    if (id !== "lotus" && id !== "sleeper") {
-      const s = new THREE.InstancedMesh(geo, shadow, ps.length);
-      s.instanceMatrix = mesh.instanceMatrix;
-      // The shadow lies a little to the side of the toys: cull it by slightly bigger bounds.
-      const sphere = (mesh.boundingSphere as THREE.Sphere).clone();
-      sphere.radius += 6;
-      s.boundingSphere = sphere;
-      scene.add(s);
-    }
+    const casts = id !== "lotus" && id !== "sleeper";
+    const { meshes, at } = instancedToys(geo, mat, casts ? shadow : null, ps);
+    for (const m of meshes) scene.add(m);
+    placed.set(k, at);
     if (++n % 8 === 0) yield;
   }
 
@@ -626,10 +606,10 @@ function* build(scene: THREE.Scene): Generator<unknown, JourneyBuild, unknown> {
       ...k,
       // Out of the static scenery (and its copies, and its shadow: they share instances).
       hide: () => {
-        const mesh = meshOf.get(key);
-        if (!mesh) return;
-        mesh.setMatrixAt(slot, HIDDEN);
-        mesh.instanceMatrix.needsUpdate = true;
+        const at = placed.get(key)?.[slot];
+        if (!at) return;
+        at.mesh.setMatrixAt(at.slot, HIDDEN);
+        at.mesh.instanceMatrix.needsUpdate = true;
       },
     })),
     train: {

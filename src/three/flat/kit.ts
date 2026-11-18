@@ -9,6 +9,7 @@
  */
 
 import * as THREE from "three";
+import { setToyDetail } from "../lib/nature";
 import { PASTEL as P } from "../lib/palette";
 import {
   BUILDINGS,
@@ -25,6 +26,19 @@ import {
 } from "../lib/toys";
 
 export type Pt = [number, number];
+
+/** How detailed toys are, as seen in the worlds and the yard (small on screen). */
+export const TOY_DETAIL = 0.5;
+
+/** Builds with lighter toy geometry (fewer curve and bevel segments, same shapes). */
+export function lightToys<T>(make: () => T): T {
+  setToyDetail(TOY_DETAIL);
+  try {
+    return make();
+  } finally {
+    setToyDetail(1);
+  }
+}
 
 // ── toys by id ───────────────────────────────────────────────────────────
 
@@ -54,7 +68,7 @@ export function toy(id: string, tint?: string): G {
   if (!g) {
     const item = LANDSCAPE[id] ?? FAMILIES[id[0] as string]?.[Number(id.slice(1)) - 1];
     if (!item) throw new Error(`No toy ${id}`);
-    g = tint ? recolour(toy(id), swaps(tint)) : item.make();
+    g = tint ? recolour(toy(id), swaps(tint)) : lightToys(() => item.make());
     g.computeBoundingBox();
     cache.set(key, g);
   }
@@ -464,4 +478,104 @@ export function placeStatic(
     s.matrix.copy(mesh.matrixWorld);
     parent.add(s);
   });
+}
+
+/** Toy chunks are this big (m): small enough that the camera culls most of a world. */
+export const TOY_CELL = 40;
+
+/** Where a placed toy ended up: its chunk's mesh and its index there. */
+export interface ToySlot {
+  mesh: THREE.InstancedMesh;
+  slot: number;
+}
+
+/**
+ * Toys of one kind as instanced meshes, one per TOY_CELL square, each with its
+ * cut-paper shadow (sharing its instances). One mesh across a whole world can
+ * never be culled (its bounds cover everything in view), so every instance of
+ * it would be drawn every frame; chunks are culled one by one.
+ * Returns the meshes, and each placement's chunk and slot (same order as `items`).
+ */
+export function instancedToys(
+  geo: THREE.BufferGeometry,
+  material: THREE.Material,
+  shadow: THREE.Material | null,
+  items: readonly { x: number; y: number; z: number; yaw: number; scale: number }[],
+): { meshes: THREE.InstancedMesh[]; at: ToySlot[] } {
+  const cells = new Map<string, number[]>();
+  items.forEach((p, i) => {
+    const key = `${Math.floor(p.x / TOY_CELL)},${Math.floor(p.z / TOY_CELL)}`;
+    const list = cells.get(key) ?? [];
+    list.push(i);
+    cells.set(key, list);
+  });
+  const m4 = new THREE.Matrix4();
+  const q = new THREE.Quaternion();
+  const up = new THREE.Vector3(0, 1, 0);
+  const pos = new THREE.Vector3();
+  const scl = new THREE.Vector3();
+  const meshes: THREE.InstancedMesh[] = [];
+  const at: ToySlot[] = new Array(items.length);
+  for (const idx of cells.values()) {
+    const mesh = new THREE.InstancedMesh(geo, material, idx.length);
+    idx.forEach((i, slot) => {
+      const p = items[i] as (typeof items)[number];
+      q.setFromAxisAngle(up, p.yaw);
+      mesh.setMatrixAt(
+        slot,
+        m4.compose(pos.set(p.x, p.y, p.z), q, scl.set(p.scale, p.scale, p.scale)),
+      );
+      at[i] = { mesh, slot };
+    });
+    mesh.computeBoundingSphere();
+    meshes.push(mesh);
+    if (shadow) {
+      const s = new THREE.InstancedMesh(geo, shadow, idx.length);
+      s.instanceMatrix = mesh.instanceMatrix;
+      // The shadow lies a little to the side of the toys: cull it by slightly bigger bounds.
+      const sphere = (mesh.boundingSphere as THREE.Sphere).clone();
+      sphere.radius += 6;
+      s.boundingSphere = sphere;
+      meshes.push(s);
+    }
+  }
+  return { meshes, at };
+}
+
+/**
+ * Splits a world-wide instanced mesh into one per TOY_CELL square (same
+ * geometry, material and per-instance colours), so the camera culls it chunk
+ * by chunk instead of drawing every instance whenever any is in view.
+ */
+export function chunked(mesh: THREE.InstancedMesh): THREE.InstancedMesh[] {
+  const cells = new Map<string, number[]>();
+  const m4 = new THREE.Matrix4();
+  for (let i = 0; i < mesh.count; i++) {
+    mesh.getMatrixAt(i, m4);
+    const x = m4.elements[12] as number;
+    const z = m4.elements[14] as number;
+    const key = `${Math.floor(x / TOY_CELL)},${Math.floor(z / TOY_CELL)}`;
+    const list = cells.get(key) ?? [];
+    list.push(i);
+    cells.set(key, list);
+  }
+  const c = new THREE.Color();
+  const out: THREE.InstancedMesh[] = [];
+  for (const idx of cells.values()) {
+    const part = new THREE.InstancedMesh(mesh.geometry, mesh.material, idx.length);
+    idx.forEach((i, slot) => {
+      mesh.getMatrixAt(i, m4);
+      part.setMatrixAt(slot, m4);
+      if (mesh.instanceColor) {
+        mesh.getColorAt(i, c);
+        part.setColorAt(slot, c);
+      }
+    });
+    part.userData = { ...mesh.userData };
+    part.castShadow = mesh.castShadow;
+    part.receiveShadow = mesh.receiveShadow;
+    part.computeBoundingSphere();
+    out.push(part);
+  }
+  return out;
 }

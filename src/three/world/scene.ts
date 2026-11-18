@@ -56,6 +56,17 @@ import { Train } from "./train";
 const STEP = 1 / 120;
 /** Scenery is batched in squares this size (metres), so off-screen parts are culled. */
 const AREA = 58;
+
+const noop = () => {};
+
+/** Fixes a static subtree's matrices as they are now and skips it in every later matrix update. */
+function freeze(obj: THREE.Object3D): void {
+  obj.updateMatrixWorld(true);
+  obj.traverse((o) => {
+    o.matrixAutoUpdate = false;
+  });
+  obj.updateMatrixWorld = noop;
+}
 /** How close you must be to pull over at a stop. */
 const NEAR = 7.5;
 /** The sky overhead, per mood (the horizon is the mood's haze colour). */
@@ -113,6 +124,14 @@ export class WorldScene implements StageScene {
   private props: Props | null = null;
   private readonly bushMeshes: THREE.InstancedMesh[] = [];
   private readonly groveMeshes: THREE.InstancedMesh[] = [];
+  /**
+   * Static scenery chunks (the tile's and its wrap copies'), with their ground
+   * bounds: each frame, any farther than the camera can see is switched off
+   * whole, so the renderer never walks or tests what's in it.
+   */
+  private readonly chunks: { obj: THREE.Object3D; sphere: THREE.Sphere }[] = [];
+  private readonly frustum = new THREE.Frustum();
+  private readonly viewProj = new THREE.Matrix4();
   /** People and animals in the way right now (a herd crossing). */
   private readonly lifeSolid: Blocker[] = [];
   private bushes: Bushes | null = null;
@@ -403,12 +422,12 @@ export class WorldScene implements StageScene {
     w.scene.add(w.props.group);
     // The land carries on in every direction, on a planet you never see curve.
     for (const g of groves) w.scene.add(g.group);
-    w.surround([
-      ...statics,
-      ...terrain,
-      ...(w.bushes ? [w.bushes.group] : []),
-      ...groves.map((g) => g.group),
-    ]);
+    const fixed = [...statics, ...terrain];
+    const copies = w.surround(
+      [...fixed, ...(w.bushes ? [w.bushes.group] : []), ...groves.map((g) => g.group)],
+      new Set(fixed),
+    );
+    w.chunk([...fixed, ...copies]);
     // Flat worlds stay flat: no planet curve (the camera never sees a horizon).
     if (journey.flat) setCurve(0, 1);
     else {
@@ -506,8 +525,10 @@ export class WorldScene implements StageScene {
    * geometry (and the bushes' live bending), so the land carries on in every
    * direction. Only the scenery is copied; life and stops live in the tile.
    */
-  private surround(sources: THREE.Object3D[]): void {
+  /** Returns the copies of the `fixed` (static) sources. */
+  private surround(sources: THREE.Object3D[], fixed: Set<THREE.Object3D>): THREE.Object3D[] {
     const { w, d } = this.data.size;
+    const made: THREE.Object3D[] = [];
     for (let a = -1; a <= 1; a++)
       for (let b = -1; b <= 1; b++) {
         if (a === 0 && b === 0) continue;
@@ -533,8 +554,41 @@ export class WorldScene implements StageScene {
           copy.position.x += a * w;
           copy.position.z += b * d;
           this.scene.add(copy);
+          if (fixed.has(src)) made.push(copy);
         }
       }
+    return made;
+  }
+
+  /**
+   * Registers static chunks for culling by distance, and stops their matrices
+   * being recomputed every frame (they never move).
+   */
+  private chunk(objs: THREE.Object3D[]): void {
+    const box = new THREE.Box3();
+    for (const obj of objs) {
+      // Matrices once, then never again: the per-frame matrix walk stops here
+      // (three.js would otherwise recompose every object in it, every frame).
+      freeze(obj);
+      box.setFromObject(obj);
+      if (box.isEmpty()) continue;
+      // (A little bigger: paper shadows fall a few metres to the side of what casts them.)
+      const sphere = box.getBoundingSphere(new THREE.Sphere());
+      sphere.radius += 6;
+      this.chunks.push({ obj, sphere });
+    }
+  }
+
+  /**
+   * Switches off whole chunks the camera can't see (one test per chunk, so the
+   * renderer never walks or tests the objects inside them).
+   */
+  private cullChunks(): void {
+    const cam = this.camera;
+    cam.updateMatrixWorld();
+    this.viewProj.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse);
+    this.frustum.setFromProjectionMatrix(this.viewProj);
+    for (const k of this.chunks) k.obj.visible = this.frustum.intersectsSphere(k.sphere);
   }
 
   private light(): void {
@@ -1327,6 +1381,7 @@ export class WorldScene implements StageScene {
     this.bushes?.update(b.x, b.z, dt, this.reduced);
     Bushes.lod(this.bushMeshes, this.camera.position);
     Grove.cull(this.groveMeshes, this.camera.position);
+    this.cullChunks();
     this.clouds?.update(this.camera.position, look, dt);
     this.puffs.update(dt);
     this.props?.sync();

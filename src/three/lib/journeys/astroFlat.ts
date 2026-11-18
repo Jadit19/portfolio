@@ -11,13 +11,17 @@
 
 import * as THREE from "three";
 import {
+  chunked,
   clay,
   drapedShadow,
   flatShape,
   footprint,
   heightsOf,
+  instancedToys,
+  lightToys,
   mix,
   ribbon,
+  type ToySlot,
   toy,
 } from "../../flat/kit";
 import { ASTRO_LANDMARKS, type AstroLandmark } from "../astroLandmarks";
@@ -314,7 +318,24 @@ function* build(scene: THREE.Scene): Generator<unknown, JourneyBuild, unknown> {
   const ground = new THREE.Mesh(t.ground, mat);
   const rockMat = rockMaterial(mat.matcap as THREE.Texture, t.snowline, "cap", 0, true);
   rockMat.vertexColors = true;
-  scene.add(yield* terrainPiece(t, rockMat, -TW / 2, TW / 2, -ZB, ZB, 1, 3));
+  // The valley in pieces (8 across, 2 deep), so the camera draws only those in view.
+  for (const [z0, z1] of [
+    [-ZB, 0],
+    [0, ZB],
+  ] as const)
+    for (let k = 0; k < 8; k++)
+      scene.add(
+        yield* terrainPiece(
+          t,
+          rockMat,
+          -TW / 2 + (k * TW) / 8,
+          -TW / 2 + ((k + 1) * TW) / 8,
+          z0,
+          z1,
+          1,
+          3,
+        ),
+      );
   for (const [z0, z1] of [
     [ZB, TD / 2],
     [-TD / 2, -ZB],
@@ -614,9 +635,8 @@ function* build(scene: THREE.Scene): Generator<unknown, JourneyBuild, unknown> {
         );
         m.setColorAt(i, tone.clone().offsetHSL(0, 0, (i % 5) * 0.012 - 0.024));
       });
-      m.computeBoundingSphere();
       m.userData.spansRoad = true;
-      scene.add(m);
+      for (const part of chunked(m)) scene.add(part);
     }
   }
   yield;
@@ -740,31 +760,23 @@ function* build(scene: THREE.Scene): Generator<unknown, JourneyBuild, unknown> {
       lay(barleyTerraces(fx, h.z, 0, 2, 3));
   }
   {
-    const geo = ladakhiHouse(1);
-    const mesh = new THREE.InstancedMesh(geo, mat, homes.length);
-    const m4 = new THREE.Matrix4();
-    const q = new THREE.Quaternion();
-    const up = new THREE.Vector3(0, 1, 0);
-    homes.forEach((o, i) => {
-      q.setFromAxisAngle(up, o.yaw);
-      mesh.setMatrixAt(
-        i,
-        m4.compose(new THREE.Vector3(o.x, 0, o.z), q, new THREE.Vector3(o.s, o.s, o.s)),
-      );
+    // Hamlet homes, in chunks the camera can cull, at the lighter toy detail (seen small).
+    const geo = lightToys(() => ladakhiHouse(1));
+    for (const o of homes) {
       blockers.push({ x: o.x, z: o.z, r: 1.7 * o.s });
       lamps.push({ x: o.x, y: 0.8, z: o.z, r: 2.8 });
       houses.push({ x: o.x, z: o.z, yaw: o.yaw, s: 1.6 * o.s });
-    });
-    mesh.computeBoundingSphere();
-    mesh.userData.spansRoad = true;
-    scene.add(mesh);
-    const sh = new THREE.InstancedMesh(geo, shadow, homes.length);
-    sh.instanceMatrix = mesh.instanceMatrix;
-    const sphere = (mesh.boundingSphere as THREE.Sphere).clone();
-    sphere.radius += 6;
-    sh.boundingSphere = sphere;
-    sh.userData.spansRoad = true;
-    scene.add(sh);
+    }
+    const { meshes } = instancedToys(
+      geo,
+      mat,
+      shadow,
+      homes.map((o) => ({ x: o.x, y: 0, z: o.z, yaw: o.yaw, scale: o.s })),
+    );
+    for (const m of meshes) {
+      m.userData.spansRoad = true;
+      scene.add(m);
+    }
   }
   // Barley by the monastery town, too.
   lay(barleyTerraces(mx + 40, mz + 4, 0.1, 3, 4));
@@ -939,7 +951,7 @@ function* build(scene: THREE.Scene): Generator<unknown, JourneyBuild, unknown> {
     key: string;
     slot: number;
   })[] = [];
-  const meshOf = new Map<string, THREE.InstancedMesh>();
+  const placed = new Map<string, ToySlot[]>();
   for (const p of toys) {
     const k = `${p.id}:${p.tint ?? ""}:${Math.floor(p.x / CHUNK)},${Math.floor(p.z / CHUNK)}`;
     const list = groups.get(k) ?? [];
@@ -967,34 +979,12 @@ function* build(scene: THREE.Scene): Generator<unknown, JourneyBuild, unknown> {
       );
   }
   {
-    const m4 = new THREE.Matrix4();
-    const q = new THREE.Quaternion();
-    const up = new THREE.Vector3(0, 1, 0);
     let n = 0;
     for (const [k, ps] of groups) {
       const [id, tint] = k.split(":") as [string, string, string];
-      const geo = toy(id, tint || undefined);
-      const mesh = new THREE.InstancedMesh(geo, mat, ps.length);
-      ps.forEach((p, i) => {
-        q.setFromAxisAngle(up, p.yaw);
-        mesh.setMatrixAt(
-          i,
-          m4.compose(
-            new THREE.Vector3(p.x, p.y, p.z),
-            q,
-            new THREE.Vector3(p.scale, p.scale, p.scale),
-          ),
-        );
-      });
-      mesh.computeBoundingSphere();
-      scene.add(mesh);
-      meshOf.set(k, mesh);
-      const s = new THREE.InstancedMesh(geo, shadow, ps.length);
-      s.instanceMatrix = mesh.instanceMatrix;
-      const sphere = (mesh.boundingSphere as THREE.Sphere).clone();
-      sphere.radius += 6;
-      s.boundingSphere = sphere;
-      scene.add(s);
+      const { meshes, at } = instancedToys(toy(id, tint || undefined), mat, shadow, ps);
+      for (const m of meshes) scene.add(m);
+      placed.set(k, at);
       if (++n % 8 === 0) yield;
     }
   }
@@ -1118,10 +1108,10 @@ function* build(scene: THREE.Scene): Generator<unknown, JourneyBuild, unknown> {
     knockables: knocks.map(({ key, slot, ...k }) => ({
       ...k,
       hide: () => {
-        const mesh = meshOf.get(key);
-        if (!mesh) return;
-        mesh.setMatrixAt(slot, HIDDEN);
-        mesh.instanceMatrix.needsUpdate = true;
+        const at = placed.get(key)?.[slot];
+        if (!at) return;
+        at.mesh.setMatrixAt(at.slot, HIDDEN);
+        at.mesh.instanceMatrix.needsUpdate = true;
       },
     })),
     mapArt: {
