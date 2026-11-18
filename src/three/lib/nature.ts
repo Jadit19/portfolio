@@ -12,6 +12,24 @@
  */
 
 import * as THREE from "three";
+
+/**
+ * Detail for toys built from now on (1 = full). Scenery in the worlds and the
+ * yard is only ever seen small, so it's built lighter (fewer curve and bevel
+ * segments, the same shapes): see `lightToys` in flat/kit.
+ */
+let DETAIL = 1;
+export function setToyDetail(d: number): void {
+  DETAIL = d;
+}
+/**
+ * A segment count at the current toy detail: lighter, but never below `min`, and
+ * never more than the shape asked for (a 4-sided hip roof stays 4-sided).
+ */
+export function toySeg(n: number, min = 3): number {
+  return Math.max(Math.min(n, min), Math.round(n * DETAIL));
+}
+
 import { PASTEL } from "./palette";
 
 export type NatureKind =
@@ -108,8 +126,8 @@ export function prism(o: PrismOptions): THREE.BufferGeometry {
     bevelEnabled: true,
     bevelThickness: bevel,
     bevelSize: bevel,
-    bevelSegments: 2,
-    curveSegments: 4,
+    bevelSegments: DETAIL < 1 ? 1 : 2,
+    curveSegments: toySeg(4, 2),
   });
   // Extruded along +z: stand it up (base at y = 0).
   geo.rotateX(-Math.PI / 2);
@@ -131,7 +149,7 @@ export function prism(o: PrismOptions): THREE.BufferGeometry {
 
 /** A short, thick trunk (smooth round sides). */
 export function trunk(radius: number, height: number): THREE.BufferGeometry {
-  const g = new THREE.CylinderGeometry(radius * 0.88, radius, height, 10, 1);
+  const g = new THREE.CylinderGeometry(radius * 0.88, radius, height, toySeg(10, 6), 1);
   g.translate(0, height / 2, 0);
   const flat = g.toNonIndexed();
   g.dispose();

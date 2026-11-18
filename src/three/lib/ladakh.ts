@@ -1736,7 +1736,16 @@ export function hipRoof(w: number, d: number, h: number, hex: string): G {
 }
 
 /** A whitewashed block with rows of dark windows on its front (+z), a maroon band and a hipped roof. */
-function hall(w: number, h: number, d: number, rows: number, roof: string, rh = 1.2): G[] {
+function hall(
+  w: number,
+  h: number,
+  d: number,
+  rows: number,
+  roof: string,
+  rh = 1.2,
+  /** The roof's width (default: an overhang of 0.55 each side). */
+  roofW = w + 1.1,
+): G[] {
   const out: G[] = [at(rbox(w, h, d, WHITEWASH, 0.06), 0, 0, 0)];
   const cols = Math.max(2, Math.round(w / 1.9));
   for (let r = 0; r < rows; r++)
@@ -1750,7 +1759,7 @@ function hall(w: number, h: number, d: number, rows: number, roof: string, rh = 
         ),
       );
   out.push(at(rbox(w + 0.08, 0.38, d + 0.08, MAROON, 0.04), 0, h - 0.38, 0));
-  out.push(at(hipRoof(w + 1.1, d + 1.1, rh, roof), 0, h, 0));
+  out.push(at(hipRoof(roofW, d + 1.1, rh, roof), 0, h, 0));
   return out;
 }
 
@@ -1831,8 +1840,14 @@ export function tawangMonastery(seed = 3): G {
       if (Math.abs(x) < 6.5) continue;
       const w = 3.3 + rnd() * 0.5;
       const h = 2.0 + Math.floor(rnd() * 3) * 0.7;
+      // Roofs a hair narrower than the spacing: neighbours meet eave to eave, never cut through.
       parts.push(
-        ...move(hall(w, h, 3.1, h > 2.8 ? 2 : 1, ROOF_GOLD, 0.8), x + (rnd() - 0.5) * 0.3, 0.25, z),
+        ...move(
+          hall(w, h, 3.1, h > 2.8 ? 2 : 1, ROOF_GOLD, 0.8, Math.min(w + 1.1, 3.95)),
+          x + (rnd() - 0.5) * 0.12,
+          0.25,
+          z,
+        ),
       );
     }
   // The prayer pole in the courtyard, and two chortens either side of the steps.

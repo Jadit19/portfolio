@@ -6,7 +6,7 @@
 
 import * as THREE from "three";
 import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeometry.js";
-import { join, natureGeometry, nub, paint, prism, trunk } from "./nature";
+import { join, natureGeometry, nub, paint, prism, toySeg, trunk } from "./nature";
 import { PASTEL as P } from "./palette";
 
 // ── geometry kit ─────────────────────────────────────────────────────────
@@ -33,7 +33,7 @@ export function at(g: G, x: number, y: number, z: number, ry = 0, rx = 0, rz = 0
 
 /** A box with rounded edges, standing on y = 0. */
 export function rbox(w: number, h: number, d: number, hex: string, r = 0.06): G {
-  const g = new RoundedBoxGeometry(w, h, d, 3, Math.min(r, w / 2.2, h / 2.2, d / 2.2));
+  const g = new RoundedBoxGeometry(w, h, d, toySeg(3, 2), Math.min(r, w / 2.2, h / 2.2, d / 2.2));
   g.translate(0, h / 2, 0);
   return paint(flat(g), hex);
 }
@@ -42,7 +42,7 @@ export function rbox(w: number, h: number, d: number, hex: string, r = 0.06): G 
 export function lathe(profile: [number, number][], hex: string, seg = 28): G {
   const g = new THREE.LatheGeometry(
     profile.map(([r, y]) => new THREE.Vector2(r, y)),
-    seg,
+    toySeg(seg, 8),
   );
   return paint(flat(g), hex);
 }
@@ -63,7 +63,7 @@ export function drum(r: number, h: number, hex: string, b = 0.05, seg = 28): G {
 }
 
 export function ball(r: number, hex: string, sx = 1, sy = 1, sz = 1): G {
-  const g = new THREE.SphereGeometry(r, 24, 16);
+  const g = new THREE.SphereGeometry(r, toySeg(24, 10), toySeg(16, 7));
   g.scale(sx, sy, sz);
   g.translate(0, r * sy, 0);
   return paint(flat(g), hex);
@@ -99,7 +99,7 @@ function wheel(r: number, w: number): G {
 }
 
 function stick(r: number, h: number, hex: string): G {
-  const g = new THREE.CylinderGeometry(r, r, h, 10);
+  const g = new THREE.CylinderGeometry(r, r, h, toySeg(10, 6));
   g.translate(0, h / 2, 0);
   return paint(flat(g), hex);
 }
