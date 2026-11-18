@@ -34,6 +34,7 @@ import { heroBike } from "../lib/hero";
 import { makeKit } from "../lib/kit";
 import { GROUND, PASTEL as P } from "../lib/palette";
 import { block, SAND } from "../lib/toys";
+import { batch } from "../merge";
 
 const INK = P.ink;
 export const BASE = GROUND.garage;
@@ -210,7 +211,10 @@ export function parkedBike(kind: BikeKind, matcap: THREE.Texture, lean = 0.07): 
   const b = heroBike(makeKit("smooth"), kind, lean);
   b.scale.setScalar(BIKE_SCALE);
   toClay(b, matcap);
-  return b;
+  // One draw per material kind instead of one per part (a hero bike has hundreds);
+  // the inner model stays its own group, as the side-stand lean turns it.
+  const inner = b.children[0];
+  return batch(b, (o) => o === inner);
 }
 
 export function buildYard(): Yard {
@@ -599,5 +603,6 @@ export function buildYard(): Yard {
     b.rotation.y = PARKED;
     bikes.set(k, b);
   }
-  return { root, bikes, matcap };
+  // Everything static drawn in a handful of calls (parts and their shadows merged by material).
+  return { root: batch(root), bikes, matcap };
 }

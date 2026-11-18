@@ -24,7 +24,11 @@ function hasMap(m: THREE.Material): boolean {
   );
 }
 
-type Plain = THREE.MeshStandardMaterial | THREE.MeshLambertMaterial | THREE.MeshBasicMaterial;
+type Plain =
+  | THREE.MeshStandardMaterial
+  | THREE.MeshLambertMaterial
+  | THREE.MeshBasicMaterial
+  | THREE.MeshMatcapMaterial;
 
 /** Shading settings that must match to share a draw; colour is not one of them. */
 function signature(m: THREE.Material): string | null {
@@ -39,6 +43,11 @@ function signature(m: THREE.Material): string | null {
     return `lam|${(m as THREE.MeshLambertMaterial).flatShading ? 1 : 0}|${common}`;
   }
   if ((m as THREE.MeshBasicMaterial).isMeshBasicMaterial && p.color) return `basic|${common}`;
+  // Clay: the same matcap in any colour shares a draw (colour into vertex colours).
+  if ((m as THREE.MeshMatcapMaterial).isMeshMatcapMaterial) {
+    const c = m as THREE.MeshMatcapMaterial;
+    return `matcap|${c.matcap?.uuid ?? "-"}|${c.flatShading ? 1 : 0}|${common}`;
+  }
   return null;
 }
 

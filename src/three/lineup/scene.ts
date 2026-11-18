@@ -29,6 +29,7 @@ import type { Lamp, NightPass } from "../flat/night";
 import type { Layout } from "../layout";
 import { aditRig, dress } from "../lib/adit";
 import { PASTEL as P } from "../lib/palette";
+import { batch } from "../merge";
 import type { StageScene } from "../stage";
 import { RideSound } from "../world/sound";
 import {
@@ -215,10 +216,13 @@ export class LineupScene implements StageScene {
 
   private buildAdit(): void {
     const make = (pose: "wave" | "point") => {
-      const a = aditRig();
-      dress(a, AROUND);
-      standPose(a, pose);
-      toClay(a, this.yard.matcap);
+      const rig = aditRig();
+      dress(rig, AROUND);
+      standPose(rig, pose);
+      toClay(rig, this.yard.matcap);
+      // Merged per joint (each named joint and clothing layer stays its own group, so it can
+      // still move or be shown and hidden): a few draws instead of one per part.
+      const a = batch(rig, (o) => o.name !== "" || o.userData.layer !== undefined);
       const [x, z] = at(...ADIT_AT);
       a.position.set(x, LIFT, z);
       a.rotation.y = this.aditYaw;
