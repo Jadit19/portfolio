@@ -969,102 +969,285 @@ export function* ladakhWorldSteps(
 
 // ── junctions ──────────────────────────────────────────────────────────────
 
+/** A road strip's shoulder tone: its colour, a little paler (as `gradedRoad` draws its edges). */
+export const shoulderOf = (c: THREE.Color): THREE.Color =>
+  c.clone().lerp(new THREE.Color("#efe6da"), 0.35);
+
+type XZ = [number, number];
+
+/** A road's edge on one side (offset by its half width), as a polyline. */
+function edgeLine(r: WorldRoad, sgn: number): XZ[] {
+  const n = r.pts.length;
+  return r.pts.map((p, i) => {
+    const a = r.pts[Math.max(0, i - 1)] as [number, number, number];
+    const b = r.pts[Math.min(n - 1, i + 1)] as [number, number, number];
+    const tx = b[0] - a[0];
+    const tz = b[2] - a[2];
+    const l = Math.hypot(tx, tz) || 1;
+    return [p[0] + (-tz / l) * r.half * sgn, p[2] + (tx / l) * r.half * sgn];
+  });
+}
+
+/** Where segments ab and cd cross: [t along ab, u along cd], or null. */
+function cross(a: XZ, b: XZ, c: XZ, d: XZ): [number, number] | null {
+  const rx = b[0] - a[0];
+  const rz = b[1] - a[1];
+  const sx = d[0] - c[0];
+  const sz = d[1] - c[1];
+  const den = rx * sz - rz * sx;
+  if (Math.abs(den) < 1e-9) return null;
+  const qx = c[0] - a[0];
+  const qz = c[1] - a[1];
+  const t = (qx * sz - qz * sx) / den;
+  const u = (qx * rz - qz * rx) / den;
+  return t >= 0 && t <= 1 && u >= 0 && u <= 1 ? [t, u] : null;
+}
+
 /**
- * Where a road ends on another, the corners between them filled with a rounded
- * fillet (radius `r`) in the joining road's colour, so the two flow into each
- * other instead of meeting as hard rectangles.
+ * Walks a polyline from point `from` (at segment `seg`, fraction `f`) a distance
+ * `len` in direction `dir` (+1 / -1): the points passed and where it stops, with
+ * the heading there (in the walking direction).
+ */
+function walk(
+  line: XZ[],
+  seg: number,
+  f: number,
+  dir: 1 | -1,
+  len: number,
+): { path: XZ[]; end: XZ; tan: XZ } | null {
+  const at = (i: number): XZ => line[i] as XZ;
+  let [px, pz] = [
+    at(seg)[0] + (at(seg + 1)[0] - at(seg)[0]) * f,
+    at(seg)[1] + (at(seg + 1)[1] - at(seg)[1]) * f,
+  ];
+  const path: XZ[] = [[px, pz]];
+  let i = dir > 0 ? seg + 1 : seg;
+  let left = len;
+  while (i >= 0 && i < line.length) {
+    const [qx, qz] = at(i);
+    const d = Math.hypot(qx - px, qz - pz);
+    if (d >= left && d > 1e-6) {
+      const t = left / d;
+      const end: XZ = [px + (qx - px) * t, pz + (qz - pz) * t];
+      path.push(end);
+      return { path, end, tan: [(qx - px) / d, (qz - pz) / d] };
+    }
+    left -= d;
+    px = qx;
+    pz = qz;
+    path.push([px, pz]);
+    i += dir;
+  }
+  return null;
+}
+
+/**
+ * Where a road ends on another, the corners between them are filled with a
+ * rounded fillet in the joining road's colour, so the two flow into each other.
+ * Built along the roads' real (curving) edges: from the point where the joining
+ * road's edge meets the through road's edge, along each edge a length that
+ * suits the angle (capped, so a shallow join never makes a long spike), joined
+ * by a curve tangent to both; a pale shoulder band runs along the curve so the
+ * edge line carries from one road round onto the other.
  */
 export function junctionAprons(
   roads: WorldRoad[],
   r = 3,
-): { pts: [number, number][]; y: number; colour: THREE.Color }[] {
-  const out: { pts: [number, number][]; y: number; colour: THREE.Color }[] = [];
+): { pts: [number, number][]; y: number; colour: THREE.Color; band?: boolean }[] {
+  const out: { pts: [number, number][]; y: number; colour: THREE.Color; band?: boolean }[] = [];
+  const edges = roads.map((rd) => [edgeLine(rd, 1), edgeLine(rd, -1)] as const);
   roads.forEach((side, si) => {
     const cols = roadColours(side);
     for (const end of [0, side.pts.length - 1]) {
       const p = side.pts[end] as [number, number, number];
-      const nb = side.pts[end === 0 ? 1 : end - 1] as [number, number, number];
-      // The road it ends on: the nearest other road's segment within reach.
-      let best: { d: number; tx: number; tz: number; half: number } | null = null;
-      roads.forEach((thru, ti) => {
-        if (ti === si) return;
-        for (let i = 0; i < thru.pts.length - 1; i++) {
-          const a = thru.pts[i] as [number, number, number];
-          const b = thru.pts[i + 1] as [number, number, number];
+      // The road it ends on: the nearest other road whose centreline passes within reach.
+      let thru = -1;
+      let bestD = 1.2;
+      roads.forEach((o, oi) => {
+        if (oi === si) return;
+        // A road that only carries on from this one (it ends right here too) isn't one it joins.
+        const o0 = o.pts[0] as [number, number, number];
+        const o1 = o.pts[o.pts.length - 1] as [number, number, number];
+        if (
+          Math.hypot(o0[0] - p[0], o0[2] - p[2]) < 1 ||
+          Math.hypot(o1[0] - p[0], o1[2] - p[2]) < 1
+        )
+          return;
+        for (let i = 0; i < o.pts.length - 1; i++) {
+          const a = o.pts[i] as [number, number, number];
+          const b = o.pts[i + 1] as [number, number, number];
           const dx = b[0] - a[0];
           const dz = b[2] - a[2];
           const l2 = dx * dx + dz * dz || 1;
           const t = Math.min(1, Math.max(0, ((p[0] - a[0]) * dx + (p[2] - a[2]) * dz) / l2));
           const d = Math.hypot(a[0] + dx * t - p[0], a[2] + dz * t - p[2]);
-          if (d < 1.2 && (!best || d < best.d)) {
-            const l = Math.sqrt(l2);
-            best = { d, tx: dx / l, tz: dz / l, half: thru.half };
+          if (d < bestD) {
+            bestD = d;
+            thru = oi;
           }
         }
       });
-      if (!best) continue;
-      const b0 = best as { d: number; tx: number; tz: number; half: number };
-      // D: the joining road's way out from the junction; T: along the through road;
-      // N: across the through road, towards the joining road.
-      let dx = nb[0] - p[0];
-      let dz = nb[2] - p[2];
+      if (thru < 0) continue;
+      const colour = (cols[end] as THREE.Color).clone();
+      const shoulder = shoulderOf(colour);
+      const T = roads[thru] as WorldRoad;
+      // Distance from a point to the through road's centreline.
+      const toThru = (x: number, z: number): number => {
+        let d = 1e9;
+        for (let i = 0; i < T.pts.length - 1; i++) {
+          const a = T.pts[i] as [number, number, number];
+          const b = T.pts[i + 1] as [number, number, number];
+          const dx = b[0] - a[0];
+          const dz = b[2] - a[2];
+          const l2 = dx * dx + dz * dz || 1;
+          const t = Math.min(1, Math.max(0, ((x - a[0]) * dx + (z - a[2]) * dz) / l2));
+          d = Math.min(d, Math.hypot(a[0] + dx * t - x, a[2] + dz * t - z));
+        }
+        return d;
+      };
+      // The joining road from this end outward. A road may run along the other for a
+      // while before it ends: the real meeting point (where the strip is cut, too) is
+      // where its centreline leaves the through road.
+      const cl = end === 0 ? side.pts : [...side.pts].reverse();
+      const inside = (q: [number, number, number]) => toThru(q[0], q[2]) < T.half - 0.05;
+      let it = 1;
+      while (it < cl.length && inside(cl[it] as [number, number, number])) it++;
+      if (it >= cl.length - 1) continue;
+      const qa = cl[it - 1] as [number, number, number];
+      const qb = cl[it] as [number, number, number];
+      let lo = 0;
+      let hi = 1;
+      for (let k = 0; k < 16; k++) {
+        const m = (lo + hi) / 2;
+        if (inside([qa[0] + (qb[0] - qa[0]) * m, 0, qa[2] + (qb[2] - qa[2]) * m])) lo = m;
+        else hi = m;
+      }
+      const E: XZ = [qa[0] + (qb[0] - qa[0]) * hi, qa[2] + (qb[2] - qa[2]) * hi];
+      // Outward direction at the meeting point.
+      let dx = qb[0] - qa[0];
+      let dz = qb[2] - qa[2];
       const dl = Math.hypot(dx, dz) || 1;
       dx /= dl;
       dz /= dl;
-      const tx = b0.tx;
-      const tz = b0.tz;
-      let nx = -tz;
-      let nz = tx;
-      if (nx * dx + nz * dz < 0) {
-        nx = -nx;
-        nz = -nz;
-      }
+      // The through road's edge on the joining road's side (nearer a point a little way out).
+      const probe: XZ = [E[0] + dx * 6, E[1] + dz * 6];
+      const near = (line: XZ[]) =>
+        Math.min(...line.map((q) => Math.hypot(q[0] - probe[0], q[1] - probe[1])));
+      const [e1, e2] = edges[thru] as readonly [XZ[], XZ[]];
+      const tl = near(e1) <= near(e2) ? e1 : e2;
       for (const sgn of [-1, 1]) {
-        // The joining road's edge on this side, and the through road's near edge.
-        const sx = -dz * sgn;
-        const sz = dx * sgn;
-        const px0 = p[0] + sx * side.half;
-        const pz0 = p[2] + sz * side.half;
-        const qx0 = p[0] + nx * b0.half;
-        const qz0 = p[2] + nz * b0.half;
-        // Where they cross: px0 + D·s = qx0 + T·u.
-        const det = dx * -tz - dz * -tx;
-        if (Math.abs(det) < 1e-4) continue;
-        const rx = qx0 - px0;
-        const rz = qz0 - pz0;
-        const sAlong = (rx * -tz - rz * -tx) / det;
-        const cx = px0 + dx * sAlong;
-        const cz = pz0 + dz * sAlong;
-        // u1: along the through road's edge, away from the joining road on this side.
-        const away = tx * sx + tz * sz >= 0 ? 1 : -1;
-        const u1x = tx * away;
-        const u1z = tz * away;
-        const cos = Math.min(0.999, Math.max(-0.999, u1x * dx + u1z * dz));
-        const th = Math.acos(cos);
-        const rr = Math.min(r, 6 * Math.tan(th / 2));
-        const L = rr / Math.tan(th / 2);
-        let bx = u1x + dx;
-        let bz = u1z + dz;
-        const bl = Math.hypot(bx, bz) || 1;
-        bx /= bl;
-        bz /= bl;
-        const ox = cx + bx * (rr / Math.sin(th / 2));
-        const oz = cz + bz * (rr / Math.sin(th / 2));
-        const a1x = cx + u1x * L;
-        const a1z = cz + u1z * L;
-        const a2x = cx + dx * L;
-        const a2z = cz + dz * L;
-        const ang1 = Math.atan2(a1z - oz, a1x - ox);
-        let ang2 = Math.atan2(a2z - oz, a2x - ox);
-        // The short way round (the arc faces the corner).
-        while (ang2 - ang1 > Math.PI) ang2 -= Math.PI * 2;
-        while (ang2 - ang1 < -Math.PI) ang2 += Math.PI * 2;
-        const pts: [number, number][] = [[cx, cz]];
-        for (let k = 0; k <= 10; k++) {
-          const a = ang1 + ((ang2 - ang1) * k) / 10;
-          pts.push([ox + Math.cos(a) * rr, oz + Math.sin(a) * rr]);
+        // This side's edge, from the cut point outward, and a few metres back before it.
+        const S: XZ = [E[0] - dz * side.half * sgn, E[1] + dx * side.half * sgn];
+        const rest: XZ[] = [];
+        for (let i = it; i < Math.min(cl.length, it + 14); i++) {
+          const q = cl[i] as [number, number, number];
+          const qp = cl[Math.max(0, i - 1)] as [number, number, number];
+          const qn = cl[Math.min(cl.length - 1, i + 1)] as [number, number, number];
+          const tx = qn[0] - qp[0];
+          const tz = qn[2] - qp[2];
+          const l = Math.hypot(tx, tz) || 1;
+          rest.push([q[0] - (tz / l) * side.half * sgn, q[2] + (tx / l) * side.half * sgn]);
         }
-        out.push({ pts, y: p[1], colour: (cols[end] as THREE.Color).clone() });
+        const back: XZ = [S[0] - dx * 8, S[1] - dz * 8];
+        const jl: XZ[] = [back, S, ...rest];
+        // Where this edge crosses the through road's near edge: nearest the cut.
+        let hit: { j: number; tj: number; k: number; tk: number; at: number } | null = null;
+        for (let j = 0; j < jl.length - 1; j++)
+          for (let k = 0; k < tl.length - 1; k++) {
+            const c = cross(jl[j] as XZ, jl[j + 1] as XZ, tl[k] as XZ, tl[k + 1] as XZ);
+            if (!c) continue;
+            const at = j + c[0] - 1; // < 0: before the cut (towards the junction)
+            if (!hit || Math.abs(at) < Math.abs(hit.at)) hit = { j, tj: c[0], k, tk: c[1], at };
+          }
+        if (!hit) continue;
+        const h = hit as { j: number; tj: number; k: number; tk: number; at: number };
+        const C: XZ = [
+          (jl[h.j] as XZ)[0] + ((jl[h.j + 1] as XZ)[0] - (jl[h.j] as XZ)[0]) * h.tj,
+          (jl[h.j] as XZ)[1] + ((jl[h.j + 1] as XZ)[1] - (jl[h.j] as XZ)[1]) * h.tj,
+        ];
+        if (Math.hypot(C[0] - E[0], C[1] - E[1]) > 14) continue;
+        // The square cut leaves a wedge of the joining road outside the through road when
+        // this edge leaves it before the centreline does (a shallow join): fill it back.
+        if (h.at < 0) {
+          // Along the through edge from C to the cut point E (E lies on that edge).
+          let ke = 0;
+          let kd = 1e9;
+          for (let k = 0; k < tl.length; k++) {
+            const d = Math.hypot((tl[k] as XZ)[0] - E[0], (tl[k] as XZ)[1] - E[1]);
+            if (d < kd) {
+              kd = d;
+              ke = k;
+            }
+          }
+          const between: XZ[] = [];
+          const step = ke > h.k ? 1 : -1;
+          for (let k = step > 0 ? h.k + 1 : h.k; step > 0 ? k < ke : k > ke; k += step) {
+            const q = tl[k] as XZ;
+            // Only the points strictly between C and E.
+            const along = (q[0] - C[0]) * (E[0] - C[0]) + (q[1] - C[1]) * (E[1] - C[1]);
+            const len2 = (E[0] - C[0]) ** 2 + (E[1] - C[1]) ** 2;
+            if (along > 0 && along < len2) between.push(q);
+          }
+          out.push({ pts: [C, S, E, ...between.reverse()], y: p[1], colour });
+        }
+        // Directions at C: out along the joining road; along the through edge away from it.
+        const sa = tl[h.k] as XZ;
+        const sb = tl[h.k + 1] as XZ;
+        let ux = sb[0] - sa[0];
+        let uz = sb[1] - sa[1];
+        const ul = Math.hypot(ux, uz) || 1;
+        ux /= ul;
+        uz /= ul;
+        // Away from the joining road: towards this side of it (from its centre to C).
+        const dir: 1 | -1 = ux * (C[0] - E[0]) + uz * (C[1] - E[1]) >= 0 ? 1 : -1;
+        if (dir < 0) {
+          ux = -ux;
+          uz = -uz;
+        }
+        const th = Math.acos(Math.min(0.999, Math.max(-0.999, ux * dx + uz * dz)));
+        // Nearly a straight carry-on: nothing to fill.
+        if (th > Math.PI * 0.94) continue;
+        const L = Math.min(4.5, r / Math.tan(th / 2));
+        if (L < 0.3) continue;
+        const a = walk(tl, h.k, h.tk, dir, L);
+        const b = walk(jl, h.j, h.tj, 1, L);
+        if (!a || !b) continue;
+        // The curve: tangent to the through edge at A, to the joining edge at B.
+        const k = L * 0.55;
+        const P0 = a.end;
+        const P1: XZ = [P0[0] - a.tan[0] * k, P0[1] - a.tan[1] * k];
+        const P3 = b.end;
+        const P2: XZ = [P3[0] - b.tan[0] * k, P3[1] - b.tan[1] * k];
+        const curve: XZ[] = [];
+        for (let i = 0; i <= 14; i++) {
+          const t = i / 14;
+          const m = 1 - t;
+          curve.push([
+            m * m * m * P0[0] + 3 * m * m * t * P1[0] + 3 * m * t * t * P2[0] + t * t * t * P3[0],
+            m * m * m * P0[1] + 3 * m * m * t * P1[1] + 3 * m * t * t * P2[1] + t * t * t * P3[1],
+          ]);
+        }
+        // Fill: along the through edge from C to A, the curve to B, back along the joining edge.
+        const fill: XZ[] = [...a.path, ...curve.slice(1), ...[...b.path].reverse().slice(1)];
+        out.push({ pts: fill, y: p[1], colour });
+        // The shoulder band along the curve (inside it, as wide as the roads' pale edges).
+        const w = Math.min(side.half, T.half) * 0.18;
+        const inner: XZ[] = curve.map((q, i) => {
+          const q0 = curve[Math.max(0, i - 1)] as XZ;
+          const q1 = curve[Math.min(curve.length - 1, i + 1)] as XZ;
+          let nx = -(q1[1] - q0[1]);
+          let nz = q1[0] - q0[0];
+          const nl = Math.hypot(nx, nz) || 1;
+          nx /= nl;
+          nz /= nl;
+          // Inward: towards C.
+          if (nx * (C[0] - q[0]) + nz * (C[1] - q[1]) < 0) {
+            nx = -nx;
+            nz = -nz;
+          }
+          return [q[0] + nx * w, q[1] + nz * w];
+        });
+        out.push({ pts: [...curve, ...inner.reverse()], y: p[1], colour: shoulder, band: true });
       }
     }
   });
@@ -1120,7 +1303,7 @@ export function gradedRoad(
     const nx = (-tz / l) * half;
     const nz = (tx / l) * half;
     const k = colourAt(i / (c.length - 1));
-    const edge = k.clone().lerp(new THREE.Color("#efe6da"), 0.35);
+    const edge = shoulderOf(k);
     for (const s of across) {
       pos.push(p.x + nx * s, p.y + lift, p.z + nz * s);
       const e = Math.abs(s) === 1 ? edge : k;

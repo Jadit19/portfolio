@@ -434,9 +434,16 @@ function* build(scene: THREE.Scene): Generator<unknown, JourneyBuild, unknown> {
     return ss / 2147483647;
   };
   /** On another road's surface (not road `ri`)? */
+  /** Roads that only carry on from road `ri` (an end of each at the same point): not ones it joins. */
+  const carriesOn = (ri: number, oi: number): boolean => {
+    const r = t.roads[ri] as WorldTile["roads"][number];
+    const o = t.roads[oi] as WorldTile["roads"][number];
+    const ends = (q: WorldTile["roads"][number]) => [q.pts[0], q.pts[q.pts.length - 1]] as P3[];
+    return ends(r).some((a) => ends(o).some((b) => Math.hypot(a[0] - b[0], a[2] - b[2]) < 1));
+  };
   const onOther = (ri: number, x: number, z: number) =>
     t.roads.some((o, oi) => {
-      if (oi === ri) return false;
+      if (oi === ri || carriesOn(ri, oi)) return false;
       for (let i = 0; i < o.pts.length - 1; i++) {
         const a = o.pts[i] as P3;
         const b = o.pts[i + 1] as P3;
@@ -546,7 +553,7 @@ function* build(scene: THREE.Scene): Generator<unknown, JourneyBuild, unknown> {
   }
   // Where roads meet: the corners filled with rounded fillets in the joining road's colour.
   for (const a of junctionAprons(t.roads))
-    lay(flatShape(a.pts, `#${a.colour.getHexString()}`, a.y + 0.075));
+    lay(flatShape(a.pts, `#${a.colour.getHexString()}`, a.y + (a.band ? 0.08 : 0.075)));
   if (stones.length) {
     const geo = new THREE.CircleGeometry(1, 6);
     geo.rotateX(-Math.PI / 2);
