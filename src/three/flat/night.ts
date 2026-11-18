@@ -142,7 +142,9 @@ export class NightPass {
     this.target = new THREE.WebGLRenderTarget(4, 4, {
       depthTexture: depth,
       stencilBuffer: true,
-      samples: 4,
+      // On high-density screens the pixels are already fine enough; multisampling would
+      // cost a colour and depth resolve every frame (heavy on phones) for little to see.
+      samples: (window.devicePixelRatio || 1) >= 1.75 ? 0 : 4,
     });
     this.u = {
       tColor: { value: this.target.texture },

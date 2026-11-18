@@ -32,8 +32,10 @@ export class Stage {
   private last = 0;
   private time = 0;
   private dpr: number;
+  /** Frame-time watch for the pixel ratio: seconds of slow / comfortable frames, and a settling delay. */
   private slow = 0;
   private fast = 0;
+  private settle = 2;
   private readonly ro: ResizeObserver;
   /** The night pass, and whether it's heading for night. */
   readonly night = new NightPass();
@@ -125,6 +127,8 @@ export class Stage {
 
   setScene(s: StageScene): void {
     this.active = s;
+    // A new scene's first frames upload and compile: don't judge the frame rate by them.
+    this.settle = 2;
     s.scene.environment = this.env;
     s.resize(this.layout());
   }
@@ -135,10 +139,11 @@ export class Stage {
     const tick = (now: number) => {
       this.raf = requestAnimationFrame(tick);
       // Clamp dt so a background tab or a hitch never makes things jump.
-      const dt = Math.min(0.05, (now - this.last) / 1000);
+      const raw = (now - this.last) / 1000;
+      const dt = Math.min(0.05, raw);
       this.last = now;
       this.time += dt;
-      this.adapt(dt);
+      this.adapt(raw);
       const s = this.active;
       if (!s) return;
       s.update(dt, this.time);
@@ -177,19 +182,33 @@ export class Stage {
     this.active?.resize(this.layout());
   }
 
-  /** Drops the pixel ratio when frames run long; recovers when there's headroom. */
-  private adapt(dt: number): void {
-    if (dt > 1 / 40) this.slow += dt;
-    else this.slow = Math.max(0, this.slow - dt * 0.5);
-    if (dt < 1 / 55) this.fast += dt;
-    else this.fast = 0;
+  /**
+   * Keeps the frame rate smooth: drops the pixel ratio a step after about a
+   * second of frames under ~50 fps, and climbs back after ~3 s of comfortable
+   * ones. Loading (a new scene's first seconds) and one-off hitches (a long
+   * frame on its own: a tab switch, a world being built) don't count, so they
+   * can't leave the picture soft for good.
+   */
+  private adapt(rawDt: number): void {
+    if (this.settle > 0) {
+      this.settle -= Math.min(rawDt, 0.05);
+      return;
+    }
+    if (rawDt > 0.1) return;
+    if (rawDt > 1 / 50) this.slow += rawDt;
+    else this.slow = Math.max(0, this.slow - rawDt * 0.5);
+    if (rawDt < 1 / 58) this.fast += rawDt;
+    else this.fast = Math.max(0, this.fast - rawDt * 2);
     const cap = Math.min(window.devicePixelRatio || 1, MAX_DPR);
-    if (this.slow > 1.5 && this.dpr > MIN_DPR) {
+    if (this.slow > 1 && this.dpr > MIN_DPR) {
       this.setDpr(Math.max(MIN_DPR, this.dpr - 0.25));
       this.slow = 0;
-    } else if (this.fast > 6 && this.dpr < cap) {
+      this.fast = 0;
+      this.settle = 0.5;
+    } else if (this.fast > 3 && this.dpr < cap) {
       this.setDpr(Math.min(cap, this.dpr + 0.25));
       this.fast = 0;
+      this.settle = 0.5;
     }
   }
 
