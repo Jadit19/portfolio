@@ -16,7 +16,7 @@
  *   e                open the nearest stop's card, then close it
  *   shot:<name>      screenshot now
  * Env: WORLD (regex on the yard card, default "astro"), NIGHT=1 (start at night), PORT, OUT,
- *      CHROME_PATH. Load takes ~150 s headless for big worlds; everything runs slowly under
+ *      CHROME_PATH, GPU=1 (use the real GPU via Metal: loads in seconds instead of minutes). Load takes ~150 s headless for big worlds; everything runs slowly under
  *      swiftshader, so compare ratios (uphill vs flat), not absolute speeds.
  */
 import { mkdir } from "node:fs/promises";
@@ -36,7 +36,10 @@ const browser = await puppeteer.launch({
   executablePath,
   headless: true,
   protocolTimeout: 900000,
-  args: ["--use-angle=swiftshader", "--enable-unsafe-swiftshader"],
+  // GPU=1: the machine's real GPU (fast, and realistic for performance); default: software (works anywhere).
+  args: process.env.GPU
+    ? ["--use-angle=metal", "--enable-gpu", "--ignore-gpu-blocklist"]
+    : ["--use-angle=swiftshader", "--enable-unsafe-swiftshader"],
 });
 const p = await browser.newPage();
 p.on("pageerror", (e) => console.log("pageerror", String(e)));

@@ -35,6 +35,14 @@ and **Read the PNGs**. Commands and env are documented in the script header. It 
 - **If the offline sim and the game disagree, the bug is in what the game adds** (Rapier props coupling, blockers, walls, render-only geometry). Don't "fix" the sim to match.
 - Bounding-box probes only tell you a mesh exists near a point; to know what's *visible*, compare heights (mesh vertex y vs `ground.height`) or hide candidates and re-shoot.
 
+## 3b. Performance (any change to scenery, world building, rendering or the yard)
+```
+SCEN="yard,yard-night,expresso,astro,astro-night" bun run .claude/skills/verify-in-browser/scripts/frame-profile.ts
+BREAK=1 SCEN=expresso …       # what the frame draws, by geometry
+bun run .claude/skills/verify-in-browser/scripts/cpu-profile.ts expresso   # main-thread self time
+```
+Both run on this machine's real GPU (Metal), at iPhone Pro Max landscape size by default, with vsync off so fps shows headroom. Compare before/after; budgets are in `world-engine`. `world-probe.ts` with `GPU=1` loads worlds in ~15 s instead of ~150 s and shows real riding speed (software rendering runs the simulation slowly). If a headless run hangs, a previous browser may still hold the GPU: `pkill -f puppeteer_dev_chrome_profile`.
+
 ## 4. Design boards
 ```
 bun --port <N> design/3d/<name>.html &
