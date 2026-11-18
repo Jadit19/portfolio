@@ -62,3 +62,23 @@ export async function exitFullscreen(): Promise<void> {
     // Already out.
   }
 }
+
+/**
+ * iPhone, opened from the Home Screen: the app always fills the whole screen,
+ * but iOS often reports a viewport a status bar short of it (in landscape too,
+ * where no status bar shows), leaving a dark band along the bottom. There, the
+ * app is sized to the screen itself (`--app-h`); everywhere else it's 100%.
+ */
+export function fitHomeScreen(): void {
+  if (!fromHomeScreen() || !/iP(hone|od)/.test(navigator.userAgent)) return;
+  const set = () => {
+    // (iOS reports the screen in portrait whichever way it's held.)
+    const short = Math.min(screen.width, screen.height);
+    const long = Math.max(screen.width, screen.height);
+    const h = window.matchMedia("(orientation: landscape)").matches ? short : long;
+    document.documentElement.style.setProperty("--app-h", `${Math.max(h, window.innerHeight)}px`);
+  };
+  set();
+  window.addEventListener("resize", set);
+  window.addEventListener("orientationchange", () => setTimeout(set, 300));
+}
