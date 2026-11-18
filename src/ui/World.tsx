@@ -147,21 +147,16 @@ export function WorldHud({ scene }: { scene: WorldScene }) {
           <span>{cam === "low" ? "Close" : "High"}</span>
         </button>
         {!touch && (
-          <>
-            <button
-              type="button"
-              className="tool"
-              onClick={() => scene.setSound(!sound)}
-              aria-pressed={sound}
-              aria-label={sound ? "Sound on (M)" : "Sound off (M)"}
-              title="Sound (M)"
-            >
-              <SoundIcon on={sound} />
-            </button>
-            <button type="button" className="tool" onClick={() => scene.honk()} title="Horn (H)">
-              <HornIcon />
-            </button>
-          </>
+          <button
+            type="button"
+            className="tool"
+            onClick={() => scene.setSound(!sound)}
+            aria-pressed={sound}
+            aria-label={sound ? "Sound on (M)" : "Sound off (M)"}
+            title="Sound (M)"
+          >
+            <SoundIcon on={sound} />
+          </button>
         )}
       </div>
 
@@ -908,21 +903,6 @@ function SoundIcon({ on }: { on: boolean }) {
           strokeLinecap="round"
         />
       )}
-    </svg>
-  );
-}
-
-function HornIcon() {
-  return (
-    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
-      <path
-        d="M3 10.5v3h3l7 4.5v-12l-7 4.5z M16 9c1.2.8 1.8 1.8 1.8 3s-.6 2.2-1.8 3"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinejoin="round"
-        strokeLinecap="round"
-      />
     </svg>
   );
 }
