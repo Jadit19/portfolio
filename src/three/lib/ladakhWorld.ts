@@ -967,6 +967,85 @@ export function* ladakhWorldSteps(
   };
 }
 
+// ── road strips meeting other roads ────────────────────────────────────────
+
+type P3 = [number, number, number];
+
+/**
+ * A road's points with its ends cut exactly at the edge of any road it joins
+ * (so its strip never lies across the other road; the fillets carry the
+ * corners), and which original point each is. Roads that only carry on from
+ * it (an end of each at the same point) don't count as roads it joins.
+ */
+export function trimmedRoad(roads: WorldRoad[], ri: number): { pts: P3[]; orig: number[] } {
+  /** Roads that only carry on from road `ri` (an end of each at the same point): not ones it joins. */
+  const carriesOn = (ri: number, oi: number): boolean => {
+    const r = roads[ri] as WorldRoad;
+    const o = roads[oi] as WorldRoad;
+    const ends = (q: WorldRoad) => [q.pts[0], q.pts[q.pts.length - 1]] as P3[];
+    return ends(r).some((a) => ends(o).some((b) => Math.hypot(a[0] - b[0], a[2] - b[2]) < 1));
+  };
+  /** On another road's surface (not road `ri`)? */
+  const onOther = (ri: number, x: number, z: number) =>
+    roads.some((o, oi) => {
+      if (oi === ri || carriesOn(ri, oi)) return false;
+      for (let i = 0; i < o.pts.length - 1; i++) {
+        const a = o.pts[i] as P3;
+        const b = o.pts[i + 1] as P3;
+        if (Math.min(a[0], b[0]) - o.half > x || Math.max(a[0], b[0]) + o.half < x) continue;
+        if (Math.min(a[2], b[2]) - o.half > z || Math.max(a[2], b[2]) + o.half < z) continue;
+        const dx = b[0] - a[0];
+        const dz = b[2] - a[2];
+        const l2 = dx * dx + dz * dz || 1;
+        const u = Math.min(1, Math.max(0, ((x - a[0]) * dx + (z - a[2]) * dz) / l2));
+        if (Math.hypot(a[0] + dx * u - x, a[2] + dz * u - z) < o.half - 0.05) return true;
+      }
+      return false;
+    });
+  /**
+   * A road's points with its ends cut exactly at the edge of any road it joins (so it never
+   * lies across the other road; the fillets carry the corners), and which original point each is.
+   */
+  const trimmed = (ri: number): { pts: P3[]; orig: number[] } => {
+    const r = roads[ri] as WorldRoad;
+    const pts = r.pts.map((p) => [...p] as P3);
+    const orig = pts.map((_, i) => i);
+    const edge = (inside: P3, outside: P3): P3 => {
+      let lo = 0;
+      let hi = 1;
+      for (let k = 0; k < 14; k++) {
+        const m = (lo + hi) / 2;
+        const x = inside[0] + (outside[0] - inside[0]) * m;
+        const z = inside[2] + (outside[2] - inside[2]) * m;
+        if (onOther(ri, x, z)) lo = m;
+        else hi = m;
+      }
+      return [
+        inside[0] + (outside[0] - inside[0]) * hi,
+        inside[1] + (outside[1] - inside[1]) * hi,
+        inside[2] + (outside[2] - inside[2]) * hi,
+      ];
+    };
+    let a = 0;
+    while (a < pts.length - 1 && onOther(ri, (pts[a] as P3)[0], (pts[a] as P3)[2])) a++;
+    let b = pts.length - 1;
+    while (b > a && onOther(ri, (pts[b] as P3)[0], (pts[b] as P3)[2])) b--;
+    const outP = pts.slice(a, b + 1);
+    const outI = orig.slice(a, b + 1);
+    if (a > 0) {
+      outP.unshift(edge(pts[a - 1] as P3, pts[a] as P3));
+      outI.unshift(a);
+    }
+    if (b < pts.length - 1) {
+      outP.push(edge(pts[b + 1] as P3, pts[b] as P3));
+      outI.push(b);
+    }
+    return { pts: outP, orig: outI };
+  };
+
+  return trimmed(ri);
+}
+
 // ── junctions ──────────────────────────────────────────────────────────────
 
 /** A road strip's shoulder tone: its colour, a little paler (as `gradedRoad` draws its edges). */
