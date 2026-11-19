@@ -5,6 +5,7 @@
  *
  *   bun --port 4310 ./index.html &
  *   SCEN="yard,yard-night,expresso,astro,astro-night" bun run .claude/skills/verify-in-browser/scripts/frame-profile.ts
+ *   AT=-170,140 SCEN=winzo …   # park the bike at x,z first (measure the densest spot, not spawn)
  *   BREAK=1 …   also list what the frame draws, by geometry (triangles, draws, instances)
  *   W=1440 H=900 DPR=2 …   other screen sizes (default 932×430 @3, an iPhone Pro Max landscape)
  */
@@ -97,7 +98,16 @@ for (const s of scen) {
   const night = s.endsWith("-night");
   const p = await page(night);
   if (s.startsWith("yard")) await measure(p, s);
-  else { await ride(p, s.replace("-night", "")); await measure(p, s); }
+  else {
+    await ride(p, s.replace("-night", ""));
+    // AT=x,z: measure with the bike parked there (e.g. over the densest scenery), not at spawn.
+    if (process.env.AT) {
+      const [x, z] = process.env.AT.split(",").map(Number);
+      await p.evaluate((x: number, z: number) => { const w = (window as any).__world; Object.assign(w.bike, { x, z, v: 0, vy: 0, air: false }); w.bike.y = w.ground.height(x, z); }, x ?? 0, z ?? 0);
+      await wait(3000);
+    }
+    await measure(p, s);
+  }
   await p.close();
 }
 await b.close();

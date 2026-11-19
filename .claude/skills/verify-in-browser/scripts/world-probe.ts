@@ -11,6 +11,11 @@
  *   at:x,z,heading   place the bike, screenshot, then hold throttle 4 s and print speed/surface
  *                    (heading: forward is (cos h, −sin h))
  *   road:<i>:<t>     place the bike on engine road i at parameter t (0–1)
+ *   mark:<name>      look at a named landmark (w.data.landmarks), from a few metres off
+ *   go:x,z,heading   place the bike and carry straight on (no settle, no screenshot)
+ *   top:x,z,y        straight-down plan view of x,z from height y (north up); top:off to undo
+ *   dump             write roads (every 4th point), stops and landmarks to OUT/world.json (for maps)
+ *   wait:<ms>        wait (e.g. to catch an animation mid-way), then shot:<name>
  *   cruise           press "Cruise to next stop", 3 screenshots 15 s apart
  *   night            toggle night (N) and wait for the fade
  *   e                open the nearest stop's card, then close it
@@ -98,6 +103,68 @@ for (const a of process.argv.slice(2)) {
       }),
     );
     await p.keyboard.up("ArrowUp");
+  } else if (a.startsWith("go:")) {
+    const [x, z, h] = a.slice(3).split(",").map(Number);
+    await p.evaluate(
+      (x: number, z: number, h: number) => {
+        const w = (window as any).__world;
+        Object.assign(w.bike, { x, z, v: 0, vy: 0, air: false, heading: h });
+        w.bike.y = w.ground.height(x, z);
+      },
+      x ?? 0,
+      z ?? 0,
+      h ?? 0,
+    );
+  } else if (a === "dump") {
+    const j = await p.evaluate(() => {
+      const w = (window as any).__world;
+      const r1 = (v: number) => Math.round(v * 10) / 10;
+      return JSON.stringify({
+        roads: w.data.roads.map((r: any) =>
+          r.road.samples.filter((_: unknown, i: number) => i % 4 === 0).map((q: any) => [r1(q.x), r1(q.z)]),
+        ),
+        stops: w.data.stops.map((s: any) => ({ id: s.id ?? s.title, x: r1(s.x), z: r1(s.z) })),
+        landmarks: Object.fromEntries(
+          Object.entries(w.data.landmarks ?? {}).map(([k, m]: [string, any]) => [k, [r1(m.x), r1(m.z)]]),
+        ),
+      });
+    });
+    await Bun.write(`${out}/world.json`, j);
+  } else if (a.startsWith("top:")) {
+    // A straight-down view of x,z from height y (north up), for checking layouts as a plan.
+    // "top:off" hands the camera back.
+    const [x, z, y] = a.slice(4).split(",").map(Number);
+    await p.evaluate(
+      (x: number, z: number, y: number, off: boolean) => {
+        const cam = (window as any).__world.camera;
+        cam.__orig ??= cam.updateMatrixWorld.bind(cam);
+        if (off) {
+          cam.updateMatrixWorld = cam.__orig;
+          return;
+        }
+        cam.updateMatrixWorld = (f?: boolean) => {
+          cam.position.set(x, y, z);
+          cam.up.set(0, 0, -1);
+          cam.lookAt(x, 0, z);
+          cam.__orig(f);
+        };
+      },
+      x ?? 0,
+      z ?? 0,
+      y ?? 120,
+      a === "top:off",
+    );
+    await wait(1500);
+    if (a !== "top:off") await shot(`top-${x}_${z}`);
+  } else if (a.startsWith("wait:")) {
+    await wait(Number(a.slice(5)));
+  } else if (a.startsWith("mark:")) {
+    // A named landmark (w.data.landmarks), from a few metres off.
+    const key = a.slice(5);
+    await place(
+      `mark-${key}`,
+      `const m = w.data.landmarks[${JSON.stringify(key)}]; return { x: m.x + 14, z: m.z + 14, h: Math.atan2(14, -14) };`,
+    );
   } else if (a.startsWith("road:")) {
     const [, i, t] = a.split(":");
     await place(
