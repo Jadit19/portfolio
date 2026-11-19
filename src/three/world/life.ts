@@ -97,6 +97,55 @@ export class Life {
     parts: { mesh: THREE.InstancedMesh; dy: number; arm?: boolean }[];
     speed: number;
   }[] = [];
+  /**
+   * Toll booms (userData.gate: { arm, flash }): the arm lifts as a bike rides
+   * through its lane, with a green APPROVED flash, and settles back after.
+   */
+  private readonly gates: {
+    obj: THREE.Object3D;
+    arm: THREE.Object3D;
+    flash: THREE.Object3D;
+    lift: number;
+    shown: number;
+    clear: number;
+  }[] = [];
+  /**
+   * Start lights (userData.lights: { reds, green }): as a bike rolls up to the gantry the five
+   * red columns come on one by one, go out together, and the green row shows: lights out.
+   */
+  private readonly lights: {
+    obj: THREE.Object3D;
+    reds: THREE.Object3D[];
+    green: THREE.Object3D;
+    /** Seconds into the sequence (−1: waiting for a bike). */
+    t: number;
+  }[] = [];
+  /**
+   * Birds in the fields (userData.fowl: { kind, head, fan?, train? }): peacocks and peahens
+   * potter and peck, egrets hop about; all edge away from a bike that comes close. A
+   * displaying peacock opens its fan as a bike nears and turns to show it off.
+   */
+  private readonly fowl: {
+    obj: THREE.Object3D;
+    kind: "peck" | "display" | "egret";
+    head: THREE.Object3D;
+    fan?: THREE.Object3D;
+    train?: THREE.Object3D;
+    home: THREE.Vector2;
+    pos: THREE.Vector2;
+    goal: THREE.Vector2 | null;
+    yaw: number;
+    /** Peck progress (0–1), or −1 between pecks; seconds to the next peck and the next stroll. */
+    peck: number;
+    nextPeck: number;
+    nextWalk: number;
+    open: number;
+    want: number;
+    shy: number;
+    t: number;
+  }[] = [];
+  /** A pump's gushing water (userData.gush: { jet, splash }). */
+  private readonly gushes: { jet: THREE.Object3D; splash: THREE.Object3D; t: number }[] = [];
   /** Things on a route (a train, a caravan, a sandstorm): userData.route. */
   private readonly movers: {
     obj: THREE.Object3D;
@@ -156,6 +205,38 @@ export class Life {
         this.elephants.push(obj);
       } else if (typeof obj.userData.spin === "number") {
         this.spinners.push(obj);
+      } else if (obj.userData.fowl) {
+        const f = obj.userData.fowl as {
+          kind: "peck" | "display" | "egret";
+          head: THREE.Object3D;
+          fan?: THREE.Object3D;
+          train?: THREE.Object3D;
+        };
+        const p = new THREE.Vector2(obj.position.x, obj.position.z);
+        this.fowl.push({
+          obj,
+          ...f,
+          home: p.clone(),
+          pos: p.clone(),
+          goal: null,
+          yaw: obj.rotation.y,
+          peck: -1,
+          nextPeck: 1 + Math.random() * 3,
+          nextWalk: 2 + Math.random() * 8,
+          open: 0,
+          want: 0,
+          shy: 0,
+          t: Math.random() * 10,
+        });
+      } else if (obj.userData.gush) {
+        const g = obj.userData.gush as { jet: THREE.Object3D; splash: THREE.Object3D };
+        this.gushes.push({ ...g, t: Math.random() * 5 });
+      } else if (obj.userData.lights) {
+        const l = obj.userData.lights as { reds: THREE.Object3D[]; green: THREE.Object3D };
+        this.lights.push({ obj, reds: l.reds, green: l.green, t: -1 });
+      } else if (obj.userData.gate) {
+        const g = obj.userData.gate as { arm: THREE.Object3D; flash: THREE.Object3D };
+        this.gates.push({ obj, arm: g.arm, flash: g.flash, lift: 0, shown: 0, clear: 99 });
       } else if (obj.userData.wave) {
         this.waves.push({ ...obj.userData.wave, speed: 5 + (this.waves.length % 3) });
       } else if (obj.userData.route) {
@@ -218,6 +299,146 @@ export class Life {
       }
     }
     return heard;
+  }
+
+  /** Lifts a toll boom while a bike is in its lane (local −3…0 across, ±4.5 along). */
+  private updateGates(b: Bike, dt: number, reduced: boolean): void {
+    const v = new THREE.Vector3();
+    for (const g of this.gates) {
+      // The bike in the gate's frame (the nearest copy across the seam).
+      let bx = b.x;
+      let bz = b.z;
+      if (this.size) {
+        const p = g.obj.position;
+        bx -= this.size.w * Math.round((bx - p.x) / this.size.w);
+        bz -= this.size.d * Math.round((bz - p.z) / this.size.d);
+      }
+      g.obj.updateMatrixWorld();
+      v.set(bx, 0, bz).applyMatrix4(g.obj.matrixWorld.clone().invert());
+      const inLane = v.x > -3.2 && v.x < 0.2 && Math.abs(v.z) < 4.5;
+      if (inLane) {
+        if (g.clear > 1.5) g.shown = 1.6;
+        g.clear = 0;
+      } else g.clear += dt;
+      const want = g.clear < 1.2 ? 1 : 0;
+      // Up briskly, down gently (eased, never a snap).
+      g.lift += (want - g.lift) * (1 - Math.exp(-dt * (want > g.lift ? 7 : 2.5)));
+      if (reduced) g.lift = want;
+      g.arm.rotation.z = -g.lift * 1.35;
+      g.shown = Math.max(0, g.shown - dt);
+      g.flash.visible = g.shown > 0;
+    }
+  }
+
+  /** Peacocks, peahens and egrets: pottering, pecking, hopping, shying, displaying. */
+  private updateFowl(b: Bike, dt: number, reduced: boolean): void {
+    for (const f of this.fowl) {
+      f.t += dt;
+      let dx = b.x - f.pos.x;
+      let dz = b.z - f.pos.y;
+      if (this.size) {
+        dx -= this.size.w * Math.round(dx / this.size.w);
+        dz -= this.size.d * Math.round(dz / this.size.d);
+      }
+      const d = Math.hypot(dx, dz);
+      // Too close (and coming): edge away from the bike, then wander home later.
+      if (!reduced && d < (f.kind === "display" ? 3.5 : 6) && (Math.abs(b.v) > 0.8 || d < 2.5)) {
+        const l = d || 1;
+        f.goal = new THREE.Vector2(f.pos.x - (dx / l) * 3.5, f.pos.y - (dz / l) * 3.5);
+        f.shy = 1.5;
+        f.peck = -1;
+      }
+      f.shy = Math.max(0, f.shy - dt);
+      if (!reduced && f.kind !== "display" && !f.goal) {
+        f.nextWalk -= dt;
+        if (f.nextWalk <= 0) {
+          const r = f.kind === "egret" ? 2.8 : 1.8;
+          const a = Math.random() * Math.PI * 2;
+          f.goal = new THREE.Vector2(
+            f.home.x + Math.cos(a) * r * Math.random(),
+            f.home.y + Math.sin(a) * r * Math.random(),
+          );
+          f.nextWalk = f.kind === "egret" ? 3 + Math.random() * 4 : 5 + Math.random() * 7;
+        }
+      }
+      let lift = 0;
+      if (f.goal) {
+        const want = f.goal.clone().sub(f.pos);
+        const gap = want.length();
+        if (gap < 0.05) f.goal = null;
+        else {
+          const speed = f.shy > 0 ? 2.4 : f.kind === "egret" ? 0.9 : 0.5;
+          f.pos.add(want.setLength(Math.min(gap, speed * dt)));
+          const yaw = Math.atan2(-(f.goal.y - f.pos.y), f.goal.x - f.pos.x);
+          f.yaw += angleDelta(f.yaw, yaw) * (1 - Math.exp(-5 * dt));
+          // Egrets go in little hops; the peafowl bob as they walk.
+          lift =
+            f.kind === "egret"
+              ? 0.14 * Math.abs(Math.sin(f.t * 8))
+              : 0.02 * Math.abs(Math.sin(f.t * 9));
+        }
+      } else if (f.kind !== "display" && !reduced) {
+        // Standing: a peck now and then (the head dips forward and comes back up, eased).
+        if (f.peck < 0) {
+          f.nextPeck -= dt;
+          if (f.nextPeck <= 0) {
+            f.peck = 0;
+            f.nextPeck = 1.5 + Math.random() * 3;
+          }
+        } else {
+          f.peck += dt / 0.8;
+          if (f.peck >= 1) f.peck = -1;
+        }
+      }
+      const p = f.peck < 0 ? 0 : Math.sin(f.peck * Math.PI) ** 2;
+      f.head.rotation.z = -p * 1.1;
+      if (f.kind === "display" && f.fan) {
+        // Opens as a bike comes within 20 m, folds once it's 28 m off; faces the bike while open.
+        if (d < 20) f.want = 1;
+        else if (d > 28) f.want = 0;
+        f.open = reduced ? f.want : f.open + (f.want - f.open) * (1 - Math.exp(-1.8 * dt));
+        const o = Math.max(0.02, f.open);
+        f.fan.scale.set(1, o, o);
+        f.fan.rotation.z = (1 - f.open) * 0.9;
+        f.fan.visible = f.open > 0.03;
+        if (f.train) f.train.visible = f.open < 0.5;
+        if (f.open > 0.3 && !reduced) {
+          const yaw = Math.atan2(-dz, dx);
+          f.yaw += angleDelta(f.yaw, yaw) * (1 - Math.exp(-1.2 * dt));
+        }
+      }
+      f.obj.position.set(f.pos.x, lift, f.pos.y);
+      f.obj.rotation.y = f.yaw;
+    }
+    for (const g of this.gushes) {
+      g.t += dt;
+      if (reduced) continue;
+      g.jet.scale.set(1, 1 + 0.15 * Math.sin(g.t * 11), 1 + 0.1 * Math.sin(g.t * 7));
+      g.splash.position.y = 0.06 * Math.abs(Math.sin(g.t * 13));
+      g.splash.rotation.y += dt * 0.8;
+    }
+  }
+
+  /** One red column every 0.7 s, all five held, then lights out and green for 2 s. */
+  private updateLights(b: Bike, dt: number, reduced: boolean): void {
+    for (const l of this.lights) {
+      let dx = b.x - l.obj.position.x;
+      let dz = b.z - l.obj.position.z;
+      if (this.size) {
+        dx -= this.size.w * Math.round(dx / this.size.w);
+        dz -= this.size.d * Math.round(dz / this.size.d);
+      }
+      const d = Math.hypot(dx, dz);
+      if (l.t < 0 && d < 28) l.t = 0;
+      else if (l.t >= 0) l.t += dt;
+      // Re-arm once the bike has gone and the sequence has finished.
+      if (l.t > 6.5 && d > 45) l.t = -1;
+      const t = reduced && l.t >= 0 ? 4.5 : l.t;
+      l.reds.forEach((r, k) => {
+        r.visible = t >= 0.7 * (k + 1) && t < 4.3;
+      });
+      l.green.visible = t >= 4.3 && t < 6.5;
+    }
   }
 
   update(b: Bike, dt: number, reduced: boolean): void {
@@ -308,6 +529,9 @@ export class Life {
       }
     }
     for (const s of this.spinners) if (!reduced) s.rotation.y += (s.userData.spin as number) * dt;
+    this.updateGates(b, dt, reduced);
+    this.updateLights(b, dt, reduced);
+    this.updateFowl(b, dt, reduced);
     // Mexican waves: a crest rolls along each stand, fans rising and arms up as it passes.
     if (!reduced) {
       const m4 = new THREE.Matrix4();

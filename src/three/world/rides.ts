@@ -9,10 +9,13 @@ import * as THREE from "three";
 import { ASTRO_INTRO, ASTRO_STOPS } from "../../content/astro";
 import { EXPRESSO_INTRO, EXPRESSO_STOPS } from "../../content/expresso";
 import type { RouteId, Stop } from "../../content/types";
+import { WINZO_INTRO, WINZO_STOPS } from "../../content/winzo";
 import { ASTRO_LANDMARKS, type AstroLandmark } from "../lib/astroLandmarks";
 import type { JourneyDef, WorldData } from "../lib/journey";
 import { astroFlat } from "../lib/journeys/astroFlat";
 import { expressoFlat } from "../lib/journeys/expressoFlat";
+import { winzoFlat } from "../lib/journeys/winzoFlat";
+import type { WinzoLandmark } from "../lib/winzoLandmarks";
 import { Brew, brewKindFor } from "./brew";
 import type { Ground } from "./ground";
 import { expressoProps, type PropSpot } from "./props";
@@ -154,8 +157,40 @@ const ASTRO: RideDef = {
   ],
 };
 
+/** WinZO's stops, by landmark (the build tags each stop with its landmark). */
+const WINZO_PINNED: Record<string, WinzoLandmark> = {
+  "winzo/payments-risk-engine": "flags",
+  "winzo/fraud-ml-platform": "scrut",
+  "winzo/zopass-subscriptions": "pass",
+  "winzo/offer-engine": "merch",
+  "winzo/data-platform": "tyres",
+  "winzo/international-payments": "toll",
+  "winzo/guest-sso-login": "gantry",
+  "winzo/refund-orchestration": "hairpin",
+};
+
+const WINZO: RideDef = {
+  id: "winzo",
+  journey: winzoFlat,
+  stops: WINZO_STOPS.map((s) => ({ ...s, sub: s.sector })),
+  intro: WINZO_INTRO,
+  kicker: "On the pit board",
+  theme: "menu",
+  pinned: WINZO_PINNED,
+  props: () => [],
+  moment: () => still(),
+  momentSound: () => "clink",
+  tips: [
+    "Riding to Greater Noida…",
+    "Down the expressway, FASTag ready…",
+    "Past the mustard fields…",
+    "Lights out in five.",
+  ],
+};
+
 export const RIDES: Partial<Record<RouteId, RideDef>> = {
   expresso: EXPRESSO,
   astro: ASTRO,
-  // Zingle AI and WinZO get flat worlds of their own later.
+  winzo: WINZO,
+  // Zingle AI gets a flat world of its own later.
 };

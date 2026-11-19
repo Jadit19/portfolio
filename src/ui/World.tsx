@@ -434,6 +434,18 @@ function MiniMap({
         for (const oz of [-m.d, 0, m.d]) {
           g.save();
           g.translate(ox, oz);
+          if (art?.fields) {
+            // Farm plots, tinted by crop, with the bunds as fine paper lines between them.
+            g.strokeStyle = PAPER;
+            g.lineWidth = 0.7;
+            for (const f of art.fields) {
+              g.fillStyle = f.colour;
+              poly(f.pts);
+              g.closePath();
+              g.fill();
+              g.stroke();
+            }
+          }
           if (art) {
             g.fillStyle = "#b9d9a2";
             for (const [x, z] of art.trees) {

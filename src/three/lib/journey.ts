@@ -635,6 +635,8 @@ export interface MapArt {
   rocks: { x: number; z: number; r: number }[];
   trees: V2[];
   bridges: { x: number; z: number; yaw: number; len: number; width: number }[];
+  /** Farm plots (each sub-field of an estate), tinted by crop on the paper. */
+  fields?: { pts: V2[]; colour: string }[];
 }
 
 /**

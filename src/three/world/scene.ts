@@ -252,7 +252,11 @@ export class WorldScene implements StageScene {
         c.userData.elephant ||
         c.userData.spin ||
         c.userData.route ||
-        c.userData.wave
+        c.userData.wave ||
+        c.userData.gate ||
+        c.userData.lights ||
+        c.userData.fowl ||
+        c.userData.gush
       )
         living.push(c);
       else root.add(c);
