@@ -328,6 +328,30 @@ export function paperShadow(colour: string, floor = 0.012): THREE.ShaderMaterial
   });
 }
 
+/**
+ * A cut-paper shadow that darkens whatever it falls on (lawn to darker lawn, a gold plaza to
+ * darker gold) instead of painting one colour: on the plain ground it is exactly `shade`.
+ * Pieces never stack: a stencil marks what's already shaded, so overlaps are one shade.
+ */
+export function tintShadow(ground: string, shade: string, floor = 0.012): THREE.ShaderMaterial {
+  const g = new THREE.Color(ground);
+  const c = new THREE.Color(shade);
+  const m = paperShadow("#ffffff", floor);
+  (m.uniforms.uC as { value: THREE.Vector3 }).value.set(c.r / g.r, c.g / g.g, c.b / g.b);
+  Object.assign(m, {
+    blending: THREE.CustomBlending,
+    blendSrc: THREE.DstColorFactor,
+    blendDst: THREE.ZeroFactor,
+    transparent: true,
+    depthWrite: false,
+    stencilWrite: true,
+    stencilRef: 2,
+    stencilFunc: THREE.NotEqualStencilFunc,
+    stencilZPass: THREE.ReplaceStencilOp,
+  });
+  return m;
+}
+
 /** A ground's heights as a texture (half floats), for shadows to drape over. */
 export interface Heights {
   tex: THREE.DataTexture;

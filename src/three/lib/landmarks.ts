@@ -79,6 +79,8 @@ function water(r: number): G {
 
 export interface Landmark {
   body: G;
+  /** Flat paint on the ground (plazas, lawns): drawn without a shadow, under the shadows. */
+  flats?: G;
   signs: THREE.Mesh[];
   /** Where warm light shows at night (local), and how far it reaches. */
   lamps: { x: number; y: number; z: number; r: number }[];
