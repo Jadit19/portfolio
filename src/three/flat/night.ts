@@ -105,6 +105,12 @@ export class NightPass {
   } | null = null;
   /** Lamps (the nearest are used); they light one by one as dusk falls. */
   lamps: Lamp[] = [];
+  /**
+   * The flat worlds' ground is the background colour (no mesh, so no depth): where nothing is
+   * drawn, light the plane at this height instead, or it stays dark under the headlight and
+   * the lamps while the roads and shadows on it light up. Null (the yard): background is sky.
+   */
+  groundY: number | null = null;
   /** A full moon in the background (screen position 0–1 from the bottom left, radius as a share of the height). */
   moon: { u: number; v: number; r: number } | null = null;
   /** Drawn over the graded frame, ungraded (things that glow at night: stars, constellations). */
@@ -131,6 +137,7 @@ export class NightPass {
     uLampCols: { value: THREE.Vector4[] };
     uMoon: { value: THREE.Vector4 };
     uAspect: { value: number };
+    uGround: { value: THREE.Vector2 };
   };
   private readonly lampsU = Array.from({ length: MAX_LAMPS }, () => new THREE.Vector4());
   private readonly colsU = Array.from({ length: MAX_LAMPS }, () => new THREE.Vector4());
@@ -163,6 +170,7 @@ export class NightPass {
       uLampCols: { value: this.colsU },
       uMoon: { value: new THREE.Vector4() },
       uAspect: { value: 1 },
+      uGround: { value: new THREE.Vector2() },
     };
     this.mat = new THREE.ShaderMaterial({
       uniforms: this.u,
@@ -187,6 +195,7 @@ export class NightPass {
         uniform vec4 uLampCols[LAMPS];
         uniform vec4 uMoon;
         uniform float uAspect;
+        uniform vec2 uGround;
         varying vec2 vUv;
 
         vec3 toDisplay(vec3 c) { return pow(max(c, 0.0), vec3(1.0 / 2.2)); }
@@ -202,22 +211,39 @@ export class NightPass {
           g = mix(vec3(l), g, uSat);
           g = (g - 0.5) * uContrast + 0.5;
           vec3 col = g;
-          if (depth < 0.9999) {
-            vec4 ndc = vec4(vUv * 2.0 - 1.0, depth * 2.0 - 1.0, 1.0);
-            vec4 view = uInvProj * ndc;
-            view /= view.w;
-            vec3 w = (uCamWorld * view).xyz;
+          bool hit = depth < 0.9999;
+          vec3 w = vec3(0.0);
+          if (hit) {
+            vec4 view = uInvProj * vec4(vUv * 2.0 - 1.0, depth * 2.0 - 1.0, 1.0);
+            w = (uCamWorld * (view / view.w)).xyz;
+          } else if (uGround.x > 0.0) {
+            // Nothing drawn: the background is the flat ground, at height uGround.y.
+            vec4 a = uInvProj * vec4(vUv * 2.0 - 1.0, -1.0, 1.0);
+            vec4 b = uInvProj * vec4(vUv * 2.0 - 1.0, 1.0, 1.0);
+            vec3 wa = (uCamWorld * (a / a.w)).xyz;
+            vec3 wb = (uCamWorld * (b / b.w)).xyz;
+            vec3 dir = wb - wa;
+            if (dir.y < -1e-5) {
+              w = wa + dir * ((uGround.y - wa.y) / dir.y);
+              hit = true;
+            }
+          }
+          if (hit) {
             // The headlight: a soft cone along the ground ahead of the bike.
             if (uBeamOn > 0.0) {
               vec2 rel = w.xz - uBeam.xy;
               vec2 dir = uBeam.zw;
               float along = dot(rel, dir);
               float across = length(rel - dir * along);
-              float width = 0.7 + along * 0.32;
-              float m = smoothstep(width, width * 0.45, across)
-                * smoothstep(15.0, 8.0, along)
-                * smoothstep(-0.2, 1.4, along)
-                * smoothstep(3.2, 1.6, w.y - uBeamY);
+              // A wide, even cone (~27° each side) from just in front of the lamp, fading
+              // gently with distance and with height (no hard edge for anything to pick out:
+              // a narrow cone lit odd patches beside the road, like one tree's shadow).
+              float width = 1.3 + along * 0.5;
+              float m = smoothstep(width, width * 0.35, across)
+                * smoothstep(-0.4, 1.6, along)
+                * smoothstep(20.0, 9.0, along)
+                * mix(1.0, 0.75, clamp(along / 20.0, 0.0, 1.0))
+                * smoothstep(4.5, 0.4, w.y - uBeamY);
               // (A touch under day, so the pale road reads as lit, not blown out.)
               col = mix(col, day * vec3(0.94, 0.95, 0.98), m * uBeamOn * 0.9);
             }
@@ -285,6 +311,7 @@ export class NightPass {
     u.uAspect.value = aspect;
     u.uInvProj.value.copy(camera.projectionMatrixInverse);
     u.uCamWorld.value.copy(camera.matrixWorld);
+    u.uGround.value.set(this.groundY === null ? 0 : 1, this.groundY ?? 0);
     // The headlight fades up through blue hour.
     const b = this.beam;
     u.uBeamOn.value = b?.on ? smooth(0.5, 0.9, p) : 0;

@@ -1047,6 +1047,7 @@ export class LineupScene implements StageScene {
   lights(night: NightPass): void {
     night.moon = { u: 0.13, v: 0.8, r: 0.07 };
     night.lamps = YARD_LAMPS;
+    night.groundY = null;
     const rig = this.rig;
     if (rig && this.walker.parent === rig) {
       const h = rig.rotation.y;

@@ -1215,6 +1215,8 @@ export class WorldScene implements StageScene {
     this.nightPhase = night.phase;
     this.nightAt = this.t;
     night.overlay = this.skyLayer;
+    // The flat ground is the background colour: light it as a plane at y 0.
+    night.groundY = 0;
     const b = this.bike;
     if (!b) return;
     night.beam = {
