@@ -15,6 +15,7 @@
  *   go:x,z,heading   place the bike and carry straight on (no settle, no screenshot)
  *   top:x,z,y        straight-down plan view of x,z from height y (north up); top:off to undo
  *   dump             write roads (every 4th point), stops and landmarks to OUT/world.json (for maps)
+ *   js:<expr>        print an expression evaluated in the page (e.g. on window.__world)
  *   wait:<ms>        wait (e.g. to catch an animation mid-way), then shot:<name>
  *   cruise           press "Cruise to next stop", 3 screenshots 15 s apart
  *   night            toggle night (N) and wait for the fade
@@ -143,6 +144,11 @@ for (const a of process.argv.slice(2)) {
           return;
         }
         cam.updateMatrixWorld = (f?: boolean) => {
+          // High plan views reach past the riding camera's far plane.
+          if (cam.far < y * 1.5) {
+            cam.far = y * 1.5;
+            cam.updateProjectionMatrix();
+          }
           cam.position.set(x, y, z);
           cam.up.set(0, 0, -1);
           cam.lookAt(x, 0, z);
@@ -156,6 +162,9 @@ for (const a of process.argv.slice(2)) {
     );
     await wait(1500);
     if (a !== "top:off") await shot(`top-${x}_${z}`);
+  } else if (a.startsWith("js:")) {
+    // Prints an expression evaluated in the page (window.__world is the live world).
+    console.log(a, "=>", JSON.stringify(await p.evaluate(a.slice(3))));
   } else if (a.startsWith("wait:")) {
     await wait(Number(a.slice(5)));
   } else if (a.startsWith("mark:")) {
