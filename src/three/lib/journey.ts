@@ -445,13 +445,38 @@ export function findJunctions(roads: { road: Road; closed?: boolean }[], near = 
     if (out.some(([ox, oz]) => (ox - x) ** 2 + (oz - z) ** 2 < 36)) return;
     out.push([x, z]);
   };
+  // Each road's points bucketed by `near`-sized cells: only neighbouring cells can hold a pair.
+  // (Visited in the same order as the plain all-pairs scan, so the result is the same.)
+  const cellKey = (x: number, z: number) => `${Math.floor(x / near)},${Math.floor(z / near)}`;
+  const grids = pts.map((b) => {
+    const g = new Map<string, number[]>();
+    b.forEach((p, j) => {
+      const k = cellKey(p.x, p.z);
+      const l = g.get(k);
+      if (l) l.push(j);
+      else g.set(k, [j]);
+    });
+    return g;
+  });
   pts.forEach((a, ia) => {
     pts.forEach((b, ib) => {
       if (ib < ia) return;
+      const g = grids[ib] as Map<string, number[]>;
       for (let i = 0; i < a.length; i++) {
         const pa = a[i];
         if (!pa) continue;
-        for (let j = ia === ib ? i + 1 : 0; j < b.length; j++) {
+        const cx = Math.floor(pa.x / near);
+        const cz = Math.floor(pa.z / near);
+        const cand: number[] = [];
+        for (let dx = -1; dx <= 1; dx++)
+          for (let dz = -1; dz <= 1; dz++) {
+            const l = g.get(`${cx + dx},${cz + dz}`);
+            if (l) cand.push(...l);
+          }
+        if (cand.length === 0) continue;
+        cand.sort((u, v) => u - v);
+        for (const j of cand) {
+          if (ia === ib && j <= i) continue;
           const pb = b[j];
           if (!pb) continue;
           if (ia === ib) {
@@ -671,7 +696,10 @@ export interface WorldData {
   /** Terrain footprint (world units), centred on the origin. */
   size: { w: number; d: number };
   /** `closed`: a loop (when left out, only the first road is one). */
-  roads: { road: Road; width: number; closed?: boolean }[];
+  /** `dusty`: a sand track (the bike throws up a dust plume along it). */
+  roads: { road: Road; width: number; closed?: boolean; dusty?: boolean }[];
+  /** The dust the bike kicks up (two tones); a brown earth by default. */
+  dust?: [string, string];
   /** Rivers and streams: centrelines and widths. */
   water: { pts: V2[]; width: number }[];
   /** Solid things the bike bounces off: buildings, trees, posts, animals. */

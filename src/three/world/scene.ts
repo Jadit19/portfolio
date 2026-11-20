@@ -256,7 +256,8 @@ export class WorldScene implements StageScene {
         c.userData.gate ||
         c.userData.lights ||
         c.userData.fowl ||
-        c.userData.gush
+        c.userData.gush ||
+        c.userData.clock
       )
         living.push(c);
       else root.add(c);
@@ -296,7 +297,7 @@ export class WorldScene implements StageScene {
           })),
         ),
       );
-    const statics = w.batchByArea(root);
+    const statics = await w.batchByArea(root);
     for (const c of terrain) w.scene.add(c);
     if (coffee) {
       w.bushes = new Bushes(coffee);
@@ -497,7 +498,7 @@ export class WorldScene implements StageScene {
   // ── building ────────────────────────────────────────────────────────────
 
   /** Batch by area so the camera (and the sun's shadow camera) only draw nearby parts. */
-  private batchByArea(root: THREE.Group): THREE.Object3D[] {
+  private async batchByArea(root: THREE.Group): Promise<THREE.Object3D[]> {
     const areas = new Map<string, THREE.Group>();
     const wide = new THREE.Group();
     const box = new THREE.Box3();
@@ -519,7 +520,16 @@ export class WorldScene implements StageScene {
       }
       g.add(c);
     }
-    const out = [batch(wide), ...[...areas.values()].map((g) => batch(g))];
+    // A few areas a frame, so the ride out keeps playing while it's done.
+    const out: THREE.Object3D[] = [];
+    let t0 = performance.now();
+    for (const g of [wide, ...areas.values()]) {
+      out.push(batch(g));
+      if (performance.now() - t0 > 12) {
+        await nextFrame();
+        t0 = performance.now();
+      }
+    }
     for (const o of out) this.scene.add(o);
     return out;
   }
@@ -1423,8 +1433,10 @@ export class WorldScene implements StageScene {
   private kickUp(s: { x: number; z: number; heading: number; v: number }, dt: number): void {
     const b = this.bike;
     const speed = Math.abs(s.v);
-    if (speed < 2.5 || b.surface === "road") return;
-    this.emitT += dt * speed * (b.surface === "water" ? 2.2 : 1.1);
+    // A sand track rides like a road but throws up a plume behind the bike.
+    const sandy = b.surface === "road" && this.ground.dusty(s.x, s.z);
+    if (speed < 2.5 || (b.surface === "road" && !sandy)) return;
+    this.emitT += dt * speed * (b.surface === "water" ? 2.2 : sandy ? 1.8 : 1.1);
     const fx = Math.cos(s.heading);
     const fz = -Math.sin(s.heading);
     const y = this.ground.height(s.x, s.z);
@@ -1452,9 +1464,10 @@ export class WorldScene implements StageScene {
           (Math.random() - 0.5) * 1.2 - fx * speed * 0.15,
           0.6 + Math.random() * 0.6,
           (Math.random() - 0.5) * 1.2 - fz * speed * 0.15,
-          Math.random() < 0.5 ? "#b9805a" : "#cfa57c",
-          0.5,
-          1.4,
+          (Math.random() < 0.5 ? this.data.dust?.[0] : this.data.dust?.[1]) ??
+            (Math.random() < 0.5 ? "#b9805a" : "#cfa57c"),
+          sandy ? 0.75 : 0.5,
+          sandy ? 1.9 : 1.4,
         );
       }
     }

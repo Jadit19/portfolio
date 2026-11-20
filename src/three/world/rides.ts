@@ -10,12 +10,15 @@ import { ASTRO_INTRO, ASTRO_STOPS } from "../../content/astro";
 import { EXPRESSO_INTRO, EXPRESSO_STOPS } from "../../content/expresso";
 import type { RouteId, Stop } from "../../content/types";
 import { WINZO_INTRO, WINZO_STOPS } from "../../content/winzo";
+import { ZINGLE_INTRO, ZINGLE_STOPS } from "../../content/zingle";
 import { ASTRO_LANDMARKS, type AstroLandmark } from "../lib/astroLandmarks";
 import type { JourneyDef, WorldData } from "../lib/journey";
 import { astroFlat } from "../lib/journeys/astroFlat";
 import { expressoFlat } from "../lib/journeys/expressoFlat";
 import { winzoFlat } from "../lib/journeys/winzoFlat";
+import { zingleFlat } from "../lib/journeys/zingleFlat";
 import type { WinzoLandmark } from "../lib/winzoLandmarks";
+import type { ZingleLandmark } from "../lib/zingleLandmarks";
 import { Brew, brewKindFor } from "./brew";
 import type { Ground } from "./ground";
 import { expressoProps, type PropSpot } from "./props";
@@ -188,9 +191,42 @@ const WINZO: RideDef = {
   ],
 };
 
+/** Zingle's waypoints, by landmark (the build tags each stop with its landmark). */
+const ZINGLE_PINNED: Record<string, ZingleLandmark> = {
+  "zingle/ai-optimisation-engine": "kund",
+  "zingle/blue-green-deployments": "pols",
+  "zingle/cost-ledger": "jantar",
+  "zingle/migration-validation": "ghat",
+  "zingle/custom-agent-platform": "bazaar",
+  "zingle/mcp-tool-platform": "dera",
+  "zingle/agent-sandbox": "toshakhana",
+  "zingle/data-foundation": "stepwell",
+  "zingle/production-reliability": "clock",
+  "zingle/engineering-standards": "haveli",
+};
+
+const ZINGLE: RideDef = {
+  id: "zingle",
+  journey: zingleFlat,
+  stops: ZINGLE_STOPS.map((s) => ({ ...s, sub: s.waypoint })),
+  intro: ZINGLE_INTRO,
+  kicker: "On the roadbook",
+  theme: "menu",
+  pinned: ZINGLE_PINNED,
+  props: () => [],
+  moment: () => still(),
+  momentSound: () => "clink",
+  tips: [
+    "Riding into the Thar…",
+    "Roadbook clipped on, tanks full…",
+    "Past the khejris and the kunds…",
+    "The fort's lights are coming on.",
+  ],
+};
+
 export const RIDES: Partial<Record<RouteId, RideDef>> = {
   expresso: EXPRESSO,
   astro: ASTRO,
   winzo: WINZO,
-  // Zingle AI gets a flat world of its own later.
+  zingle: ZINGLE,
 };

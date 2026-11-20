@@ -31,7 +31,7 @@ export class Ground {
   private readonly sx: number;
   private readonly sz: number;
   private readonly ys: Float32Array;
-  /** Surface grid: 0 ground, 1 road, 2 water; one cell per CELL units. */
+  /** Surface grid: 0 ground, 1 road, 2 water, 3 a sand track (ridden as road, dusty); one cell per CELL units. */
   private readonly kind: Uint8Array;
   private readonly cw: number;
   private readonly cd: number;
@@ -97,7 +97,7 @@ export class Ground {
       stamp(
         r.road.samples.map((q) => [q.x, q.z] as V2),
         r.width / 2 + 0.35,
-        1,
+        r.dusty ? 3 : 1,
         false,
       );
     // Bridge decks are road, over whatever water runs underneath.
@@ -175,6 +175,17 @@ export class Ground {
     const j = Math.floor((z + this.d / 2) / C);
     if (i < 0 || j < 0 || i >= this.cw || j >= this.cd) return "ground";
     const k = this.kind[j * this.cw + i];
-    return k === 1 ? "road" : k === 2 ? "water" : "ground";
+    return k === 1 || k === 3 ? "road" : k === 2 ? "water" : "ground";
+  }
+
+  /** On a sand track (ridden as road, but it throws up dust)? */
+  dusty(px: number, pz: number): boolean {
+    const x = this.wrapX(px);
+    const z = this.wrapZ(pz);
+    const C = Ground.CELL;
+    const i = Math.floor((x + this.w / 2) / C);
+    const j = Math.floor((z + this.d / 2) / C);
+    if (i < 0 || j < 0 || i >= this.cw || j >= this.cd) return false;
+    return this.kind[j * this.cw + i] === 3;
   }
 }

@@ -144,6 +144,8 @@ export class Life {
     shy: number;
     t: number;
   }[] = [];
+  /** Clock hands that keep the local time (userData.clock: { hour, minute }). */
+  private readonly clocks: { hour: THREE.Object3D; minute: THREE.Object3D }[] = [];
   /** A pump's gushing water (userData.gush: { jet, splash }). */
   private readonly gushes: { jet: THREE.Object3D; splash: THREE.Object3D; t: number }[] = [];
   /** Things on a route (a train, a caravan, a sandstorm): userData.route. */
@@ -228,6 +230,8 @@ export class Life {
           shy: 0,
           t: Math.random() * 10,
         });
+      } else if (obj.userData.clock) {
+        this.clocks.push(obj.userData.clock as { hour: THREE.Object3D; minute: THREE.Object3D });
       } else if (obj.userData.gush) {
         const g = obj.userData.gush as { jet: THREE.Object3D; splash: THREE.Object3D };
         this.gushes.push({ ...g, t: Math.random() * 5 });
@@ -409,6 +413,16 @@ export class Life {
       }
       f.obj.position.set(f.pos.x, lift, f.pos.y);
       f.obj.rotation.y = f.yaw;
+    }
+    if (this.clocks.length) {
+      // The local time, read off the device (clockwise as you face the dial).
+      const now = new Date();
+      const m = now.getMinutes() + now.getSeconds() / 60;
+      const h = (now.getHours() % 12) + m / 60;
+      for (const c of this.clocks) {
+        c.hour.rotation.z = (-h / 12) * Math.PI * 2;
+        c.minute.rotation.z = (-m / 60) * Math.PI * 2;
+      }
     }
     for (const g of this.gushes) {
       g.t += dt;

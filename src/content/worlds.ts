@@ -48,7 +48,7 @@ export const WORLDS: readonly WorldInfo[] = [
     tint: "#f26a1b",
     feel: { speed: 0.75, grip: 0.55, lean: 0.7 },
     line: "Sand is just a road that hasn't made up its mind. Keep the throttle on.",
-    stops: 8,
+    stops: 10,
   },
   {
     id: "winzo",
